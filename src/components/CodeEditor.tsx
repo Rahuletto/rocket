@@ -22,6 +22,8 @@ export default function CodeEditor({ id, active, language }: Props) {
 
   const updateEditorContent = async (id: string) => {
     const file = getFileObject(id);
+    if(!file) return;
+    
     const content = await readFile(file.path);
 
     setCode(content);
@@ -43,18 +45,6 @@ export default function CodeEditor({ id, active, language }: Props) {
     setTheme(ht?.getAttribute("data-theme") || "dark");
 
     language = Languages.find(({ name }) => name === language)?.name || "plaintext";
-
-    let timeoutId: NodeJS.Timeout;
-    window.addEventListener("keydown", (e: KeyboardEvent) => {
-      timeoutId = setTimeout(() => onSave(), 3000);
-      
-
-      if (e.ctrlKey && e.key === "s") {
-        e.preventDefault();
-        onSave();
-      }
-    });
-    return () => clearTimeout(timeoutId);
   }, []);
 
   function handleEditorWillMount(monaco: typeof import("/Users/rahulmarban/Documents/Coding/rocket/node_modules/monaco-editor/esm/vs/editor/editor.api")) {
@@ -88,6 +78,9 @@ export default function CodeEditor({ id, active, language }: Props) {
 
   useEffect(() => {
     setTheme(html?.getAttribute("data-theme") || "dark");
+
+    const timeoutId = setTimeout(() => onSave(), 1000);
+    return () => clearTimeout(timeoutId);
   }, [code]);
 
   return (
@@ -102,9 +95,7 @@ export default function CodeEditor({ id, active, language }: Props) {
         value={display}
         options={{
           acceptSuggestionOnCommitCharacter: true,
-          acceptSuggestionOnEnter: "on",
           accessibilitySupport: "auto",
-          autoIndent: "keep",
           automaticLayout: true,
           codeLens: true,
           colorDecorators: true,
@@ -118,8 +109,8 @@ export default function CodeEditor({ id, active, language }: Props) {
           fixedOverflowWidgets: false,
           folding: true,
           foldingStrategy: "auto",
-          fontLigatures: false,
-          formatOnPaste: false,
+          fontLigatures: true,
+          formatOnPaste: true,
           formatOnType: false,
           hideCursorInOverviewRuler: false,
           links: true,
@@ -137,9 +128,7 @@ export default function CodeEditor({ id, active, language }: Props) {
           renderWhitespace: "none",
           revealHorizontalRightPadding: 30,
           roundedSelection: true,
-          rulers: [],
           scrollBeyondLastColumn: 5,
-          scrollBeyondLastLine: true,
           selectOnLineNumbers: true,
           selectionClipboard: true,
           selectionHighlight: true,

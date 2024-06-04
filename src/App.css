@@ -14,6 +14,7 @@ html[data-theme="light"] {
   --background: #dfe3f8;
   --background-dark: #bcc0d9;
   --background-light: #e7eafb;
+  --background-lighter: #f2f4fb;
   --green: #37c157;
   --red: #e34b4b;
   --yellow: #f2d024;
@@ -33,6 +34,7 @@ html[data-theme="dark"] {
   --color: #ced3ef;
   --background: #14151b;
   --background-light: #191b22;
+  --background-lighter: #24262f;
   --background-dark: #0b0b0f;
   --green: #52c36d;
   --red: #dd5656;
@@ -50,6 +52,7 @@ html[data-theme="dark"] {
     --background: #14151b;
     --background-light: #191b22;
     --background-dark: #0b0b0f;
+    --background-lighter: #24262f;
 
     --green: #52c36d;
     --red: #dd5656;
@@ -75,6 +78,11 @@ body {
   height: 12px;
 }
 
+
+::-webkit-scrollbar-track:horizontal {
+  background: var(--background-light);
+}
+
 ::-webkit-scrollbar-track {
   background: var(--background);
 }
@@ -89,14 +97,19 @@ body {
   -o-border-radius: 20px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  border: 4px solid var(--background);
+
+::-webkit-scrollbar-thumb:horizontal {
+  border: 4px solid var(--background-light);
   background: var(--background-dark);
   border-radius: 20px;
   -webkit-border-radius: 20px;
   -moz-border-radius: 20px;
   -ms-border-radius: 20px;
   -o-border-radius: 20px;
+}
+
+.source-item .source-codes {
+  border-left: 1px solid var(--background-lighter);
 }
 
 * {

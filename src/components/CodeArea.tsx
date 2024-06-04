@@ -48,6 +48,7 @@ export default function CodeArea() {
       <div
         ref={scrollRef}
         className="select-none code-tab-items flex items-center overflow-x-auto p-2 gap-2"
+        style={{width: "calc(100vw - 250px)"}}
       >
         {opened.map((item) => {
           const file = getFileObject(item) as File;

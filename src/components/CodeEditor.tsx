@@ -91,7 +91,7 @@ export default function CodeEditor({ id, active, language }: Props) {
       <MonacoEditor
         path={language}
         defaultLanguage={language}
-        theme={`vs-${theme}`}
+        theme={`${theme == "dark" ? "vs-dark" : "github"}`}
         value={display}
         options={{
           acceptSuggestionOnCommitCharacter: true,

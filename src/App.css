@@ -17,6 +17,7 @@ html[data-theme="light"] {
   --background-lighter: #f2f4fb;
   --green: #37c157;
   --red: #e34b4b;
+  --files: #848797;
   --yellow: #f2d024;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -36,6 +37,7 @@ html[data-theme="dark"] {
   --background-light: #191b22;
   --background-lighter: #24262f;
   --background-dark: #0b0b0f;
+  --files: #292b35;
   --green: #52c36d;
   --red: #dd5656;
   --yellow: #f1d54b;
@@ -53,7 +55,7 @@ html[data-theme="dark"] {
     --background-light: #191b22;
     --background-dark: #0b0b0f;
     --background-lighter: #24262f;
-
+    --files: #292b35;
     --green: #52c36d;
     --red: #dd5656;
     --yellow: #f1d54b;

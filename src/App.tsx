@@ -2,7 +2,7 @@ import CodeArea from "./components/CodeArea"
 import Context from "./components/menus/FileContext"
 import Sidebar from "./components/Sidebar"
 import Titlebar from "./components/Titlebar"
-import { SourceProvider } from "./context/SourceContext"
+import { SourceProvider } from "./provider/SourceContext"
 
 export default function App() {
   return <div className="wrapper rounded-lg select-none">

@@ -6,6 +6,8 @@ module.exports = {
       colors: {
         background: "var(--background)",
         light: "var(--background-light)",
+        lighter: "var(--background-lighter)",
+        files: "var(--files)",
         color: "var(--color)",
         red: "var(--red)",
         green: "var(--green)",

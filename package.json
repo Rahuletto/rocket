@@ -15,7 +15,6 @@
     "autoprefixer": "^10.4.19",
     "language-detect": "^1.1.0",
     "language-map": "^1.5.0",
-    "nanoid": "5.0.7",
     "postcss": "^8.4.38",
     "react": "^18.3.1",
     "react-contexify": "^6.0.0",

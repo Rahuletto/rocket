@@ -108,7 +108,7 @@ export async function formatAndResolve(message: unknown) {
         kind: "directory",
         name: file.name,
         path: file.path,
-        children: await readDirectory(file.path + "/"),
+        children: fileSort(await readDirectory(file.path + "/")),
       };
       folders.push(entry);
       saveFileObject(id, entry);
@@ -125,5 +125,23 @@ export async function formatAndResolve(message: unknown) {
     }
   }
 
-  return [...folders, ...entries];
+  return [...fileSort(folders), ...fileSort(entries)];
+}
+
+function fileSort(items: (File | Folder)[]): (File | Folder)[] {
+  const files = items.filter(item => item.kind === 'file' && !item.name.includes('.git') && !item.name.includes('.DS_Store'));
+  const directories = items.filter(item => item.kind === 'directory');
+
+  const sortedDirectories: (File|Folder)[] = directories.sort((a, b) => a.name.localeCompare(b.name));
+  const sortedFiles = files.sort((a, b) => {
+      const isDotFileA = a.name.startsWith('.');
+      const isDotFileB = b.name.startsWith('.');
+
+      if (isDotFileA && !isDotFileB) return -1;
+      if (!isDotFileA && isDotFileB) return 1;
+
+      return a.name.localeCompare(b.name);
+  });
+
+  return sortedDirectories.concat(sortedFiles);
 }

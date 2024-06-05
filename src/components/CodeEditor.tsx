@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import MonacoEditor from "@monaco-editor/react";
 import { getFileObject } from "../stores/file";
 import { readFile, writeFile } from "../helpers/filesys";
@@ -39,7 +39,7 @@ export default function CodeEditor({ id, active, language }: Props) {
     updateEditorContent(id);
   }, [id]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const ht = document.querySelector("html");
     setHtml(ht);
     setTheme(ht?.getAttribute("data-theme") || "dark");

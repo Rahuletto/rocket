@@ -8,13 +8,21 @@ import CodeEditor from "./CodeEditor";
 import { IoClose } from "react-icons/io5";
 
 import { getMonacoLanguage } from "../helpers/language";
+import { useEffect } from "react";
+import { getOpens } from "../stores/opened";
 
 export default function CodeArea() {
-  const { opened, selected, setSelect, delOpenedFile } = useSource();
+  const {
+    opened,
+    selected,
+    setSelect,
+    delOpenedFile,
+  } = useSource();
   const scrollRef = useHorizontalScroll();
   const onSelectItem = (id: string) => {
     setSelect("");
     setSelect(id);
+
   };
 
   const isImage = (name: string) => {
@@ -26,7 +34,7 @@ export default function CodeArea() {
     ev.stopPropagation();
     let selectedIndex = opened.findIndex((a) => a === selected);
     let closingIndex = opened.findIndex((a) => a === id);
-  
+
     if (selectedIndex !== -1) {
       if (selectedIndex === closingIndex) {
         if (selectedIndex === opened.length - 1) {
@@ -36,7 +44,7 @@ export default function CodeArea() {
         }
       }
     }
-  
+
     delOpenedFile(id);
   };
 
@@ -48,7 +56,7 @@ export default function CodeArea() {
       <div
         ref={scrollRef}
         className="select-none code-tab-items flex items-center overflow-x-auto p-2 gap-2"
-        style={{width: "calc(100vw - 250px)"}}
+        style={{ width: "calc(100vw - 250px)" }}
       >
         {opened.map((item) => {
           const file = getFileObject(item) as File;
@@ -76,9 +84,10 @@ export default function CodeArea() {
         {opened[0] &&
           [opened[opened.findIndex((a) => a === selected)]].map((item) => {
             const file = getFileObject(item) as File;
-            if (isImage(file.name)) {
-              return <img src={file.path} />;
-            }
+            console.log(opened)
+            // if (isImage(file.name)) {
+            //   return <img src={file.path} />;
+            // }
 
             const path = file.path.split("/");
             const dot = path[path.length - 1].split(".");

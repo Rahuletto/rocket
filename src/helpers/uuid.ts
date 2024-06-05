@@ -2,21 +2,32 @@ function simpleHash(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
         hash = (hash << 5) - hash + str.charCodeAt(i);
-        hash |= 0;
+        hash |= 0; // Convert to 32bit integer
     }
     return hash;
 }
 
 export function uuid(input: string): string {
     const hash = simpleHash(input);
-    const length = 32;
     let id = Math.abs(hash).toString(36);
-    if (id.length > length) {
-        id = id.slice(0, length);
-    } else {
-        while (id.length < length) {
-            id = '0' + id;
-        }
+
+    // Ensure the ID is exactly 32 characters long
+    while (id.length < 32) {
+        id += Math.abs(simpleHash(id)).toString(36);
     }
-    return id;
+
+    // Remove leading zeros
+    id = id.replace(/^0+/g, '');
+
+    // If the resulting ID is empty, fallback to "0"
+    if (id === '') {
+        id = '0';
+    }
+
+    // Ensure the ID is exactly 32 characters long
+    while (id.length < 32) {
+        id += Math.abs(simpleHash(id)).toString(36);
+    }
+
+    return id.slice(0, 32); // Trim to ensure exactly 32 characters
 }

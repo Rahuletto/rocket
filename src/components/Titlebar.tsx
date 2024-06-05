@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { appWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api";
 
 export default function Titlebar() {
   const [isScaleup, setScaleup] = useState(false);
@@ -13,6 +14,12 @@ export default function Titlebar() {
     appWindow.toggleMaximize();
     setScaleup(false);
   };
+
+
+  function openTerminal() {
+    const project = localStorage.getItem("project") || "/"
+    invoke("open_terminal", { directory: project })
+  }
 
   useEffect(() => {
     const html = document.querySelector("html");
@@ -87,6 +94,12 @@ export default function Titlebar() {
             }
           >
             Open
+          </button>
+          <button
+            className="px-2 py-1 rounded-lg text-xs hover:bg-light"
+            onClick={() => openTerminal()}
+          >
+            Terminal
           </button>
 
           <button

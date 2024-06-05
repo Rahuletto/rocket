@@ -1,6 +1,6 @@
-use std::{ thread, time::Duration};
-use std::sync::mpsc::{channel, Sender, Receiver};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::{thread, time::Duration};
 use tauri::Manager;
 
 mod fs;
@@ -45,7 +45,10 @@ fn create_folder(dir_path: &str) -> String {
 fn watch_changes(dir_path: String, app_handle: tauri::AppHandle) {
     thread::spawn(move || {
         let path = std::path::PathBuf::from(&dir_path);
-        let (tx, rx): (Sender<Result<notify::Event, notify::Error>>, Receiver<Result<notify::Event, notify::Error>>) = channel();
+        let (tx, rx): (
+            Sender<Result<notify::Event, notify::Error>>,
+            Receiver<Result<notify::Event, notify::Error>>,
+        ) = channel();
         let mut watcher: RecommendedWatcher = Watcher::new(
             tx,
             Config::default().with_poll_interval(Duration::from_secs(2)),
@@ -55,19 +58,38 @@ fn watch_changes(dir_path: String, app_handle: tauri::AppHandle) {
 
         loop {
             match rx.recv() {
-                Ok(event) => {
-                    match event {
-                        _payload => {
-                            app_handle
-                                .emit_all("file-changed", fs::read_directory(&dir_path))
-                                .unwrap();
-                        }
+                Ok(event) => match event {
+                    _payload => {
+                        app_handle
+                            .emit_all("file-changed", fs::read_directory(&dir_path))
+                            .unwrap();
                     }
-                }
+                },
                 Err(e) => println!("Thread fail 🧵: {:?}", e),
             }
         }
     });
+}
+
+#[tauri::command]
+fn open_terminal(directory: String) -> String {
+    #[cfg(target_os = "windows")]
+    let cmd = format!("start cmd /K cd /d {}", directory);
+
+    #[cfg(target_os = "macos")]
+    let cmd = format!("open -a Terminal {}", directory);
+
+    #[cfg(target_os = "linux")]
+    let cmd = format!("gnome-terminal -- bash -c 'cd {}; exec bash'", directory);
+
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .spawn()
+        .map_err(|e| e.to_string())
+        .expect("Error while opening Rocket Control panel! 🚀💥");
+
+    String::from("Success")
 }
 
 fn main() {
@@ -79,7 +101,8 @@ fn main() {
             delete_file,
             delete_folder,
             create_folder,
-            watch_changes
+            watch_changes,
+            open_terminal
         ])
         .run(tauri::generate_context!())
         .expect("Rocket launch failed! 🚀💥");

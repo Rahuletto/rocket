@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback } from "react"
+import { createContext, useContext, useState, useCallback, useEffect } from "react"
+import { getOpens, setOpens } from "../stores/opened";
 
 interface SourceContext {
   selected: string;
@@ -6,6 +7,7 @@ interface SourceContext {
   opened: string[];
   addOpenedFile: (id: string) => void;
   delOpenedFile: (id: string) => void;
+  setOpenedFile: (ids: string[]) => void;
 }
 
 const SourceContext = createContext<SourceContext>({
@@ -13,7 +15,8 @@ const SourceContext = createContext<SourceContext>({
   setSelect: (id) => { },
   opened: [],
   addOpenedFile: (id) => { },
-  delOpenedFile: (id) => { }
+  delOpenedFile: (id) => { },
+  setOpenedFile: (ids) => { }
 });
 
 export const SourceProvider = ({ children }: { children: JSX.Element | JSX.Element[] }) => {
@@ -24,9 +27,18 @@ export const SourceProvider = ({ children }: { children: JSX.Element | JSX.Eleme
     setSelected(id)
   }
 
+  useEffect(() => { 
+    if(opened.length === 0) return;
+    if(opened[0]) setOpens(opened);
+  }, [opened])
+
   const addOpenedFile = useCallback((id: string) => {
     if (opened.includes(id)) return;
     updateOpenedFiles(prevOpen => ([...prevOpen, id]))
+  }, [opened])
+
+  const setOpenedFile = useCallback((ids: string[]) => {
+    updateOpenedFiles(ids)
   }, [opened])
 
   const delOpenedFile = useCallback((id: string) => {
@@ -38,14 +50,15 @@ export const SourceProvider = ({ children }: { children: JSX.Element | JSX.Eleme
     setSelect,
     opened,
     addOpenedFile,
-    delOpenedFile
+    delOpenedFile,
+    setOpenedFile
   }}>
     {children}
   </SourceContext.Provider>
 }
 
 export const useSource = () => {
-  const { selected, setSelect, opened, addOpenedFile, delOpenedFile } = useContext(SourceContext)
+  const { selected, setSelect, opened, addOpenedFile, delOpenedFile, setOpenedFile } = useContext(SourceContext)
 
-  return { selected, setSelect, opened, addOpenedFile, delOpenedFile }
+  return { selected, setSelect, opened, addOpenedFile, delOpenedFile, setOpenedFile }
 }

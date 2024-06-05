@@ -9,14 +9,25 @@ import { FaFile, FaFolder } from "react-icons/fa6";
 import { saveFileObject } from "../stores/file";
 import { listen } from "@tauri-apps/api/event";
 import { uuid } from "../helpers/uuid";
+import { useSource } from "../provider/SourceContext";
 
 export default function Sidebar() {
+  const { setOpenedFile } = useSource();
   const [projectName, setProjectName] = useState("");
   const [files, setFiles] = useState<(File | Folder)[]>([]);
   const [newFile, setNewFile] = useState(false);
   const [newFolder, setNewFolder] = useState(false);
   const [filename, setFilename] = useState("");
   const [foldername, setFoldername] = useState("");
+
+  // useEffect(() => {
+  //   if (files.length === 0) return;
+  //   const local = localStorage.getItem("open-files");
+  //   let loc: string[] = JSON.parse(local || "[]");
+  //   if (loc.length != 0) {
+  //     setOpenedFile(loc);
+  //   }
+  // }, [files]);
 
   const loadFile = async () => {
     const selected = await open({
@@ -28,7 +39,7 @@ export default function Sidebar() {
     if (project === selected) {
       return;
     } else {
-      localStorage.removeItem("opened");
+      localStorage.removeItem("directories");
       localStorage.setItem("project", selected as string);
       setProjectName(selected as string);
 

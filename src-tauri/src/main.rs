@@ -1,55 +1,86 @@
-#![cfg_attr(
-    all(not(debug_assertions), target_os = "windows"),
-    windows_subsystem = "windows"
-)]
+use std::{ thread, time::Duration};
+use std::sync::mpsc::{channel, Sender, Receiver};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use tauri::Manager;
 
-mod fc;
-
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod fs;
 
 #[tauri::command]
-fn open_folder(folder_path: &str) -> String {
-    let files = fc::read_directory(folder_path);
+fn open(folder_path: &str) -> String {
+    let files = fs::read_directory(folder_path);
     files
 }
 
 #[tauri::command]
-fn get_file_content(file_path: &str) -> String {
-    let content = fc::read_file(file_path);
+fn get_contents(dir_path: &str) -> String {
+    let content = fs::read_file(dir_path);
     content
 }
 
 #[tauri::command]
-fn write_file(file_path: &str, content: &str) -> String {
-    fc::write_file(file_path, content);
-    String::from("OK")
+fn write(dir_path: &str, content: &str) -> String {
+    fs::write_file(dir_path, content);
+    String::from("Success")
 }
 
 #[tauri::command]
-fn delete_file(file_path: &str) -> String {
-    fc::remove_file(file_path);
-    String::from("OK")
+fn delete_file(dir_path: &str) -> String {
+    fs::remove_file(dir_path);
+    String::from("Success")
 }
 
 #[tauri::command]
-fn delete_folder(file_path: &str) -> String {
-    fc::remove_folder(file_path);
-    String::from("OK")
+fn delete_folder(dir_path: &str) -> String {
+    fs::remove_folder(dir_path);
+    String::from("Success")
 }
 
 #[tauri::command]
-fn create_folder(file_path: &str) -> String {
-    fc::create_directory(file_path);
-    String::from("OK")
+fn create_folder(dir_path: &str) -> String {
+    fs::create_folder(dir_path);
+    String::from("Success")
+}
+
+#[tauri::command]
+fn watch_changes(dir_path: String, app_handle: tauri::AppHandle) {
+    thread::spawn(move || {
+        let path = std::path::PathBuf::from(&dir_path);
+        let (tx, rx): (Sender<Result<notify::Event, notify::Error>>, Receiver<Result<notify::Event, notify::Error>>) = channel();
+        let mut watcher: RecommendedWatcher = Watcher::new(
+            tx,
+            Config::default().with_poll_interval(Duration::from_secs(2)),
+        )
+        .unwrap();
+        watcher.watch(&path, RecursiveMode::Recursive).unwrap();
+
+        loop {
+            match rx.recv() {
+                Ok(event) => {
+                    match event {
+                        _payload => {
+                            app_handle
+                                .emit_all("file-changed", fs::read_directory(&dir_path))
+                                .unwrap();
+                        }
+                    }
+                }
+                Err(e) => println!("Thread fail 🧵: {:?}", e),
+            }
+        }
+    });
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, open_folder, get_file_content, write_file, delete_file, delete_folder, create_folder])
+        .invoke_handler(tauri::generate_handler![
+            open,
+            get_contents,
+            write,
+            delete_file,
+            delete_folder,
+            create_folder,
+            watch_changes
+        ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("Rocket launch failed! 🚀💥");
 }

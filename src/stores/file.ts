@@ -1,16 +1,16 @@
-import { File } from "../types/File"
+import { File, Folder } from "../types/File"
 
-interface IEntries {
-  [key: string]: File
+interface Entries {
+  [key: string]: File | Folder
 }
 
-const entries: IEntries = {}
+const entries: Entries = {}
 
-export const saveFileObject = (id: string, file: File): void => {
+export const saveFileObject = (id: string, file: File | Folder): void => {
   entries[id] = file
 }
 
-export const getFileObject = (id: string): File => {
+export const getFileObject = (id: string): File | Folder => {
   return entries[id]
 }
 

@@ -1,23 +1,27 @@
-import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
-import { readDirectory, writeFile } from "../helpers/filesys";
+import { createFolder, writeFile } from "../helpers/filesys";
 import { saveFileObject } from "../stores/file";
-import { File } from "../types/File";
+import { File, Folder } from "../types/File";
 import NavFiles from "./NavFiles";
 import { FaFile, FaFolder, FaFolderOpen, FaPlus } from "react-icons/fa6";
 import { TriggerEvent, useContextMenu } from "react-contexify";
+import { dirStore, isOpened } from "../stores/states";
+import { uuid } from "../helpers/uuid";
 
 interface Props {
-  file: File;
+  file: File | Folder;
   active: boolean;
 }
 
 export default function NavFolderItem({ file, active }: Props) {
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<(File | Folder)[]>([]);
   const [unfold, setUnfold] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [newFile, setNewFile] = useState(false);
+  const [newFolder, setNewFolder] = useState(false);
   const [filename, setFilename] = useState("");
+  const [foldername, setFoldername] = useState("");
+
 
   const { show } = useContextMenu({
     id: "file",
@@ -35,18 +39,30 @@ export default function NavFolderItem({ file, active }: Props) {
 
   const onShow = async (ev: React.MouseEvent<HTMLSpanElement, MouseEvent>) => {
     ev.stopPropagation();
+    if (file.kind === "file") return;
+
+    const opener =isOpened(file.path)
 
     if (loaded) {
+      dirStore(file.path, false)
       setUnfold(!unfold);
       return;
     }
 
-    const entries = await readDirectory(file.path + "/");
-
     setLoaded(true);
-    setFiles(entries);
+    setFiles(file.children);
+    dirStore(file.path, true)
     setUnfold(!unfold);
+
   };
+
+  useEffect(() => {
+    if (isOpened(file.path) && file.kind === "directory"){
+      setLoaded(true);
+      setFiles(file.children);
+      setUnfold(true);
+    }
+  }, [])
 
   useEffect(() => {
     if (newFile) {
@@ -55,7 +71,34 @@ export default function NavFolderItem({ file, active }: Props) {
     }
   }, [newFile]);
 
-  const onEnter = (key: string) => {
+  const onEnterFolder = (key: string) => {
+    if (key === "Escape") {
+      setNewFolder(false);
+      setFoldername("");
+      return;
+    }
+
+    if (key !== "Enter") return;
+
+    const folder = `${file.path}/${foldername}`;
+
+    createFolder(folder).then(() => {
+      const id = uuid(folder);
+      const newFolder: Folder = {
+        id,
+        name: foldername,
+        path: folder,
+        kind: "directory",
+        children: [],
+      };
+
+      saveFileObject(id, newFolder);
+      setNewFolder(false);
+      setFoldername("");
+    });
+  };
+
+  const onEnterFile = (key: string) => {
     if (key === "Escape") {
       setNewFile(false);
       setFilename("");
@@ -64,19 +107,18 @@ export default function NavFolderItem({ file, active }: Props) {
 
     if (key !== "Enter") return;
 
-    const filePath = `${file.path}/${filename}`;
+    const dirPath = `${file.path}/${filename}`;
 
-    writeFile(filePath, "").then(() => {
-      const id = nanoid();
+    writeFile(dirPath, "").then(() => {
+      const id = uuid(dirPath);
       const newFile: File = {
         id,
         name: filename,
-        path: filePath,
+        path: dirPath,
         kind: "file",
       };
 
       saveFileObject(id, newFile);
-      setFiles((prevEntries) => [newFile, ...prevEntries]);
       setNewFile(false);
       setFilename("");
     });
@@ -92,7 +134,7 @@ export default function NavFolderItem({ file, active }: Props) {
           active ? "bg-gray-200 border-2 border-light" : ""
         } rounded-lg flex items-center gap-2 px-2 py-0.5 text-gray-500 hover:text-gray-400 cursor-pointer`}
       >
-        <i className="text-color">{active ? <FaFolderOpen /> : <FaFolder />}</i>
+        <i className="text-files">{active ? <FaFolderOpen /> : <FaFolder />}</i>
         <div className="source-header flex items-center justify-between w-full group">
           <span onClick={onShow} className="text-[14px] w-full">
             {file.name}
@@ -108,7 +150,7 @@ export default function NavFolderItem({ file, active }: Props) {
 
       {newFile ? (
         <div className="mx-4 flex items-center gap-0.5 p-2">
-          <i className="text-gray-300 mr-2">
+          <i className="text-files mr-2">
             <FaFile />
           </i>
           <input
@@ -116,19 +158,13 @@ export default function NavFolderItem({ file, active }: Props) {
             value={filename}
             id="new-file"
             onChange={(ev) => setFilename(ev.target.value)}
-            onKeyUp={(ev) => onEnter(ev.key)}
+            onKeyUp={(ev) => onEnterFile(ev.key)}
             className="inp bg-transparent"
           />
         </div>
       ) : null}
 
-      <NavFiles
-        onContextMenu={(e: TriggerEvent) =>
-          displayMenu(e, { name: file.name, path: file.path, isFile: true })
-        }
-        visible={unfold}
-        files={files}
-      />
+      <NavFiles visible={unfold} files={files} />
     </div>
   );
 }

@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { File } from "../types/File";
+import { File, Folder } from "../types/File";
 import { open } from "@tauri-apps/api/dialog";
 import NavFiles from "./NavFiles";
-import { createFolder, readDirectory } from "../helpers/filesys";
-import { BiPlus, BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
+import { createFolder, formatAndResolve, readAndSet } from "../helpers/filesys";
+import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 import { writeFile } from "../helpers/filesys";
 import { FaFile, FaFolder } from "react-icons/fa6";
-import { nanoid } from "nanoid";
 import { saveFileObject } from "../stores/file";
+import { listen } from "@tauri-apps/api/event";
+import { uuid } from "../helpers/uuid";
 
 export default function Sidebar() {
   const [projectName, setProjectName] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<(File | Folder)[]>([]);
   const [newFile, setNewFile] = useState(false);
   const [newFolder, setNewFolder] = useState(false);
   const [filename, setFilename] = useState("");
@@ -23,22 +24,34 @@ export default function Sidebar() {
     });
 
     if (!selected) return;
-    localStorage.setItem("project", selected as string);
-    setProjectName(selected as string);
+    const project = localStorage.getItem("project");
+    if (project === selected) {
+      return;
+    } else {
+      localStorage.removeItem("opened");
+      localStorage.setItem("project", selected as string);
+      setProjectName(selected as string);
 
-    readDirectory(selected + "/").then((readFiles) => {
-      setFiles(readFiles);
-    });
+      readAndSet(selected + "/", setFiles);
+    }
   };
 
   useEffect(() => {
     const project = localStorage.getItem("project");
     if (project) {
       setProjectName(project);
-      readDirectory(project + "/").then((readFiles) => {
-        setFiles(readFiles);
-      });
+      readAndSet(project + "/", setFiles);
     }
+
+    const unlisten = listen("file-changed", (event: any) => {
+      formatAndResolve(event.payload).then((resp) => {
+        setFiles(resp);
+      });
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   useEffect(() => {
@@ -60,16 +73,16 @@ export default function Sidebar() {
     const folder = `${projectName}/${foldername}`;
 
     createFolder(folder).then(() => {
-      const id = nanoid();
-      const newFolder: File = {
+      const id = uuid(folder);
+      const newFolder: Folder = {
         id,
         name: foldername,
         path: folder,
         kind: "directory",
+        children: [],
       };
 
       saveFileObject(id, newFolder);
-      setFiles((prevEntries) => [newFolder, ...prevEntries]);
       setNewFolder(false);
       setFoldername("");
     });
@@ -84,19 +97,18 @@ export default function Sidebar() {
 
     if (key !== "Enter") return;
 
-    const filePath = `${projectName}/${filename}`;
+    const dirPath = `${projectName}/${filename}`;
 
-    writeFile(filePath, "").then(() => {
-      const id = nanoid();
+    writeFile(dirPath, "").then(() => {
+      const id = uuid(dirPath);
       const newFile: File = {
         id,
         name: filename,
-        path: filePath,
+        path: dirPath,
         kind: "file",
       };
 
       saveFileObject(id, newFile);
-      setFiles((prevEntries) => [...prevEntries, newFile]);
       setNewFile(false);
       setFilename("");
     });
@@ -158,7 +170,7 @@ export default function Sidebar() {
             <NavFiles visible={true} files={files} />
             {newFile ? (
               <div className="mx-4 flex items-center gap-0.5 p-2">
-                <i className="text-gray-300">
+                <i className="text-files mr-2">
                   <FaFile />
                 </i>
                 <input

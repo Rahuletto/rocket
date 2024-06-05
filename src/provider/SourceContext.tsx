@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from "react"
 
-interface ISourceContext {
+interface SourceContext {
   selected: string;
   setSelect: (id: string) => void;
   opened: string[];
@@ -8,7 +8,7 @@ interface ISourceContext {
   delOpenedFile: (id: string) => void;
 }
 
-const SourceContext = createContext<ISourceContext>({
+const SourceContext = createContext<SourceContext>({
   selected: '',
   setSelect: (id) => { },
   opened: [],

@@ -1,5 +1,5 @@
 import { File } from "../types/File";
-import { useSource } from "../context/SourceContext";
+import { useSource } from "../provider/SourceContext";
 import { getFileObject } from "../stores/file";
 import FileIcon from "./FileIcon";
 import useHorizontalScroll from "../helpers/useHorizontalScroll";

@@ -13,6 +13,9 @@ module.exports = {
         green: "var(--green)",
         yellow: "var(--yellow)",
       },
+    },
+    fontFamily: {
+      'sans': ['system-ui'],
     }
   },
   plugins: [],

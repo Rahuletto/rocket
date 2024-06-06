@@ -8,8 +8,6 @@ import CodeEditor from "./CodeEditor";
 import { IoClose } from "react-icons/io5";
 
 import { getMonacoLanguage } from "../helpers/language";
-import { useEffect } from "react";
-import { getOpens } from "../stores/opened";
 
 export default function CodeArea() {
   const {
@@ -62,12 +60,13 @@ export default function CodeArea() {
           const file = getFileObject(item) as File;
           const active =
             selected === item
-              ? "bg-[rgba(255,255,255,0.05)] text-gray-400"
+              ? "bg-lighter text-gray-400"
               : "";
 
           return (
             <div
               onClick={() => onSelectItem(file.id)}
+              draggable={true}
               className={`tab-item shrink-0 rounded-lg px-3 py-1.5 select-none text-gray-500 cursor-pointer hover:text-gray-400 flex items-center gap-2 ${active}`}
               key={item}
             >
@@ -85,9 +84,9 @@ export default function CodeArea() {
           [opened[opened.findIndex((a) => a === selected)]].map((item) => {
             const file = getFileObject(item) as File;
             console.log(opened)
-            // if (isImage(file.name)) {
-            //   return <img src={file.path} />;
-            // }
+            if (isImage(file.name)) {
+              return <img src={file.path} />;
+            }
 
             const path = file.path.split("/");
             const dot = path[path.length - 1].split(".");

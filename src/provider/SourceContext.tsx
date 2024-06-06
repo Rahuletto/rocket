@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react"
-import { getOpens, setOpens } from "../stores/opened";
 
 interface SourceContext {
   selected: string;
@@ -26,12 +25,7 @@ export const SourceProvider = ({ children }: { children: JSX.Element | JSX.Eleme
   const setSelect = (id: string) => {
     setSelected(id)
   }
-
-  useEffect(() => { 
-    if(opened.length === 0) return;
-    if(opened[0]) setOpens(opened);
-  }, [opened])
-
+  
   const addOpenedFile = useCallback((id: string) => {
     if (opened.includes(id)) return;
     updateOpenedFiles(prevOpen => ([...prevOpen, id]))

@@ -13,6 +13,7 @@ interface Props {
 
 export default function NavFiles({ files, visible, onContextMenu }: Props) {
   const { setSelect, selected, addOpenedFile } = useSource();
+
   const { show } = useContextMenu({
     id: "file",
   });
@@ -38,8 +39,8 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
   };
 
   return (
-    <div className={`source-codes h-fill px-3 ${visible ? "" : "hidden"}`}>
-      {files.map((file) => {
+    <div className={`source-codes h-fill pl-3 ${visible ? "" : "hidden"}`}>
+      {[...files].map((file) => {
         const isSelected = file.id === selected;
 
         if (file.kind === "directory") {
@@ -64,7 +65,7 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
               }
               key={file.id}
               className={`soure-item select-none ${
-                isSelected ? "source-item-active bg-light" : ""
+                isSelected ? "source-item-active bg-lighter" : ""
               } rounded-lg flex items-center gap-2 px-2 py-0.5 text-gray-500 hover:text-gray-400 cursor-pointer`}
             >
               <FileIcon name={file.name} />

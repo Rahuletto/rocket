@@ -86,8 +86,11 @@ export const readAndSet = (
       setFiles(resolver);
     });
   });
-  invoke("watch_changes", { dirPath: folderPath });
 };
+
+export const watch = (folderPath: string) => {
+  invoke("watch_changes", { dirPath: folderPath });
+}
 
 export async function formatAndResolve(message: unknown) {
   const mess = message as string;

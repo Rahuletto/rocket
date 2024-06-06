@@ -53,7 +53,12 @@ pub fn read_directory(dir_path: &str) -> String {
 
 
 pub fn read_file(path: &str) -> String {
-    let contents = fs::read_to_string(path).expect("Crash!");
+
+    let contents = match fs::read_to_string(path) {
+        Ok(str) => str,
+        Err(_error) => String::from("\\FILE_ERROR\\"),
+    };
+
     contents
 }
 
@@ -61,7 +66,7 @@ pub fn write_file(path: &str, content: &str) -> String {
     let file_path = Path::new(path);
     let result = match fs::write(file_path, content) {
         Ok(()) => String::from("Success"),
-        Err(_err) => String::from("Crash!")
+        Err(_err) => String::from("\\FILE_ERROR\\")
     };
 
     result

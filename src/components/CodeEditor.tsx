@@ -4,6 +4,7 @@ import MonacoEditor from "@monaco-editor/react";
 import { getFileObject } from "../stores/file";
 import { readFile, writeFile } from "../helpers/filesys";
 import { Languages } from "../types/Languages";
+import { IoWarning } from "react-icons/io5";
 
 
 interface Props {
@@ -88,6 +89,7 @@ export default function CodeEditor({ id, active, language }: Props) {
       className={`w-full overflow-y-auto ${visible}`}
       style={{ height: "calc(100vh - 40px)" }}
     >
+      {!code.startsWith("\\FILE_ERROR\\") && !code.startsWith("Crash!") ? 
       <MonacoEditor
         path={language}
         defaultLanguage={language}
@@ -158,7 +160,11 @@ export default function CodeEditor({ id, active, language }: Props) {
         }}
         onChange={(value) => setCode(value || "")}
         beforeMount={handleEditorWillMount}
-      />
+      /> : <div className="flex flex-col items-center w-full h-full justify-center gap-2">
+          <IoWarning size={96} color="var(--yellow)"/>
+          <h1 className="text-4xl font-bold">Beep Boop?</h1>
+          <p className="max-w-[600px] text-center text-lg">The file is not displayed in the text editor because it is either binary or uses an unsupported text encoding.</p>
+        </div>}
     </main>
   );
 }

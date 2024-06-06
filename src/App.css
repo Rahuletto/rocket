@@ -14,11 +14,11 @@ html[data-theme="light"] {
   --background: #dfe3f8;
   --background-dark: #bcc0d9;
   --background-light: #e7eafb;
-  --background-lighter: #f2f4fb;
+  --background-lighter: #b6b8be;
   --green: #37c157;
   --red: #e34b4b;
   --files: #848797;
-  --yellow: #f2d024;
+  --yellow: #dec235;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

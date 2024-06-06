@@ -2,32 +2,18 @@ import { useEffect, useState } from "react";
 import { File, Folder } from "../types/File";
 import { open } from "@tauri-apps/api/dialog";
 import NavFiles from "./NavFiles";
-import { createFolder, formatAndResolve, readAndSet } from "../helpers/filesys";
+import { formatAndResolve, readAndSet, readDirectory, watch } from "../helpers/filesys";
 import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
-import { writeFile } from "../helpers/filesys";
-import { FaFile, FaFolder } from "react-icons/fa6";
-import { saveFileObject } from "../stores/file";
 import { listen } from "@tauri-apps/api/event";
-import { uuid } from "../helpers/uuid";
-import { useSource } from "../provider/SourceContext";
+import { CreateFileDialog, CreateFolderDialog } from "../helpers/create";
 
 export default function Sidebar() {
-  const { setOpenedFile } = useSource();
+
   const [projectName, setProjectName] = useState("");
   const [files, setFiles] = useState<(File | Folder)[]>([]);
   const [newFile, setNewFile] = useState(false);
   const [newFolder, setNewFolder] = useState(false);
-  const [filename, setFilename] = useState("");
-  const [foldername, setFoldername] = useState("");
 
-  // useEffect(() => {
-  //   if (files.length === 0) return;
-  //   const local = localStorage.getItem("open-files");
-  //   let loc: string[] = JSON.parse(local || "[]");
-  //   if (loc.length != 0) {
-  //     setOpenedFile(loc);
-  //   }
-  // }, [files]);
 
   const loadFile = async () => {
     const selected = await open({
@@ -44,6 +30,7 @@ export default function Sidebar() {
       setProjectName(selected as string);
 
       readAndSet(selected + "/", setFiles);
+      watch(project + "/")
     }
   };
 
@@ -52,17 +39,16 @@ export default function Sidebar() {
     if (project) {
       setProjectName(project);
       readAndSet(project + "/", setFiles);
+      watch(project + "/")
     }
 
-    const unlisten = listen("file-changed", (event: any) => {
-      formatAndResolve(event.payload).then((resp) => {
-        setFiles(resp);
-      });
+    const unlisten = listen("file-changed", () => {
+      readAndSet(project + "/", setFiles);
     });
 
     return () => {
-      unlisten.then((fn) => fn());
-    };
+      unlisten.then(fn => fn());
+    }
   }, []);
 
   useEffect(() => {
@@ -71,59 +57,6 @@ export default function Sidebar() {
       inp?.focus();
     }
   }, [newFile, newFolder]);
-
-  const onEnterFolder = (key: string) => {
-    if (key === "Escape") {
-      setNewFolder(false);
-      setFoldername("");
-      return;
-    }
-
-    if (key !== "Enter") return;
-
-    const folder = `${projectName}/${foldername}`;
-
-    createFolder(folder).then(() => {
-      const id = uuid(folder);
-      const newFolder: Folder = {
-        id,
-        name: foldername,
-        path: folder,
-        kind: "directory",
-        children: [],
-      };
-
-      saveFileObject(id, newFolder);
-      setNewFolder(false);
-      setFoldername("");
-    });
-  };
-
-  const onEnterFile = (key: string) => {
-    if (key === "Escape") {
-      setNewFile(false);
-      setFilename("");
-      return;
-    }
-
-    if (key !== "Enter") return;
-
-    const dirPath = `${projectName}/${filename}`;
-
-    writeFile(dirPath, "").then(() => {
-      const id = uuid(dirPath);
-      const newFile: File = {
-        id,
-        name: filename,
-        path: dirPath,
-        kind: "file",
-      };
-
-      saveFileObject(id, newFile);
-      setNewFile(false);
-      setFilename("");
-    });
-  };
 
   return (
     <aside id="sidebar" className="w-60 shrink-0 h-full bg-transparent">
@@ -161,38 +94,17 @@ export default function Sidebar() {
         className="code-structure overflow-auto mb-12 pb-12 px-2 pt-2"
         style={{ height: "calc(100vh - 40px)" }}
       >
-        {files[0] ? (
+        {files && files[0] && files.length ? (
           <>
             {newFolder ? (
-              <div className="mx-4 flex items-center gap-0.5 p-2">
-                <i className="text-gray-300">
-                  <FaFolder />
-                </i>
-                <input
-                  type="text"
-                  value={foldername}
-                  id="new-file"
-                  onChange={(ev) => setFoldername(ev.target.value)}
-                  onKeyUp={(ev) => onEnterFolder(ev.key)}
-                  className="inp bg-transparent"
-                />
-              </div>
+              <CreateFolderDialog
+                path={projectName}
+                setNewFolder={setNewFolder}
+              />
             ) : null}
             <NavFiles visible={true} files={files} />
             {newFile ? (
-              <div className="mx-4 flex items-center gap-0.5 p-2">
-                <i className="text-files mr-2">
-                  <FaFile />
-                </i>
-                <input
-                  type="text"
-                  value={filename}
-                  id="new-file"
-                  onChange={(ev) => setFilename(ev.target.value)}
-                  onKeyUp={(ev) => onEnterFile(ev.key)}
-                  className="inp bg-transparent"
-                />
-              </div>
+              <CreateFileDialog path={projectName} setNewFile={setNewFile} />
             ) : null}
           </>
         ) : (

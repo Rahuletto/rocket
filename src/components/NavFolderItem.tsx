@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { createFolder, writeFile } from "../helpers/filesys";
-import { saveFileObject } from "../stores/file";
 import { File, Folder } from "../types/File";
 import NavFiles from "./NavFiles";
-import { FaFile, FaFolder, FaFolderOpen, FaPlus } from "react-icons/fa6";
+import {  FaFolder, FaFolderOpen, FaPlus } from "react-icons/fa6";
 import { TriggerEvent, useContextMenu } from "react-contexify";
 import { dirStore, isOpened } from "../stores/states";
-import { uuid } from "../helpers/uuid";
+
+import { CreateFileDialog } from "../helpers/create";
 
 interface Props {
   file: File | Folder;
@@ -18,9 +17,6 @@ export default function NavFolderItem({ file, active }: Props) {
   const [unfold, setUnfold] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [newFile, setNewFile] = useState(false);
-  const [newFolder, setNewFolder] = useState(false);
-  const [filename, setFilename] = useState("");
-  const [foldername, setFoldername] = useState("");
 
 
   const { show } = useContextMenu({
@@ -41,8 +37,6 @@ export default function NavFolderItem({ file, active }: Props) {
     ev.stopPropagation();
     if (file.kind === "file") return;
 
-    const opener =isOpened(file.path)
-
     if (loaded) {
       dirStore(file.path, false)
       setUnfold(!unfold);
@@ -62,7 +56,7 @@ export default function NavFolderItem({ file, active }: Props) {
       setFiles(file.children);
       setUnfold(true);
     }
-  }, [])
+  }, [file])
 
   useEffect(() => {
     if (newFile) {
@@ -70,59 +64,6 @@ export default function NavFolderItem({ file, active }: Props) {
       inp?.focus();
     }
   }, [newFile]);
-
-  const onEnterFolder = (key: string) => {
-    if (key === "Escape") {
-      setNewFolder(false);
-      setFoldername("");
-      return;
-    }
-
-    if (key !== "Enter") return;
-
-    const folder = `${file.path}/${foldername}`;
-
-    createFolder(folder).then(() => {
-      const id = uuid(folder);
-      const newFolder: Folder = {
-        id,
-        name: foldername,
-        path: folder,
-        kind: "directory",
-        children: [],
-      };
-
-      saveFileObject(id, newFolder);
-      setNewFolder(false);
-      setFoldername("");
-    });
-  };
-
-  const onEnterFile = (key: string) => {
-    if (key === "Escape") {
-      setNewFile(false);
-      setFilename("");
-      return;
-    }
-
-    if (key !== "Enter") return;
-
-    const dirPath = `${file.path}/${filename}`;
-
-    writeFile(dirPath, "").then(() => {
-      const id = uuid(dirPath);
-      const newFile: File = {
-        id,
-        name: filename,
-        path: dirPath,
-        kind: "file",
-      };
-
-      saveFileObject(id, newFile);
-      setNewFile(false);
-      setFilename("");
-    });
-  };
 
   return (
     <div className="source-item">
@@ -149,19 +90,7 @@ export default function NavFolderItem({ file, active }: Props) {
       </div>
 
       {newFile ? (
-        <div className="mx-4 flex items-center gap-0.5 p-2">
-          <i className="text-files mr-2">
-            <FaFile />
-          </i>
-          <input
-            type="text"
-            value={filename}
-            id="new-file"
-            onChange={(ev) => setFilename(ev.target.value)}
-            onKeyUp={(ev) => onEnterFile(ev.key)}
-            className="inp bg-transparent"
-          />
-        </div>
+        <CreateFileDialog path={file.path} setNewFile={setNewFile} />
       ) : null}
 
       <NavFiles visible={unfold} files={files} />

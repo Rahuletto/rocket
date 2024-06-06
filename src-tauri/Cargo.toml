@@ -1,10 +1,10 @@
 [package]
 name = "Rocket"
-version = "0.0.0"
+version = "0.1.1"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["rahuletto"]
 license = ""
-repository = ""
+repository = "https://github.com/Rahuletto/rocket"
 edition = "2021"
 rust-version = "1.57"
 

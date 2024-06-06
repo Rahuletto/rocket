@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "Rocket",
-    "version": "0.0.1"
+    "version": "0.1.1"
   },
   "tauri": {
     "macOSPrivateApi": true,
@@ -29,7 +29,7 @@
         "icons/icon.ico"
       ],
       "identifier": "com.rocket.dev",
-      "longDescription": "",
+      "longDescription": "A super-fast, ram-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀",
       "macOS": {
         "entitlements": null,
         "exceptionDomain": "",
@@ -38,7 +38,7 @@
         "signingIdentity": null
       },
       "resources": [],
-      "shortDescription": "",
+      "shortDescription": "Ship your code with Rocket",
       "targets": "all",
       "windows": {
         "certificateThumbprint": null,
@@ -55,10 +55,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 1080,
         "resizable": true,
         "title": "Rocket",
-        "width": 1024,
+        "width": 1920,
         "transparent": true,
         "decorations": false
       }

@@ -55,10 +55,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 1080,
+        "height": 750,
         "resizable": true,
         "title": "Rocket",
-        "width": 1920,
+        "width": 1280,
         "transparent": true,
         "decorations": false
       }

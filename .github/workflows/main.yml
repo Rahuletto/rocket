@@ -15,8 +15,6 @@ jobs:
         include:
           - platform: 'macos-13'
             args: '--target universal-apple-darwin'
-          - platform: 'macos-13'
-            args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
     steps:

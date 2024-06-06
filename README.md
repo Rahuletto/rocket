@@ -38,7 +38,7 @@ We love Rocket, but let's be real. it’s not perfect. Here are a few things to 
 
 Ready to get started? Here’s how to install Rocket on your Mac:
 
-1. Download the DMG file from [Github](https://github.com/Rahuletto/rocket).
+1. Download the DMG file from [Github](https://github.com/Rahuletto/rocket/releases).
 2. Open the DMG file and drag Rocket to your Applications folder.
 3. Launch Rocket and get ready to code!
 
@@ -91,7 +91,7 @@ Join our awesome community of developers:
 - [GitHub Discussions](https://github.com/Rahuletto/rocket/discussions)
 - [Discord Server](https://discord.gg/3JzDV9T5Fn)
 
-If you run into any issues or have questions, reach out on our [support channel](https://rocket.example.com/support).
+If you run into any issues or have questions, reach out on our [support channel](https://discord.gg/3JzDV9T5Fn).
 
 ## License
 

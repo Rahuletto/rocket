@@ -42,6 +42,38 @@ Ready to get started? Here’s how to install Rocket on your Mac:
 2. Open the DMG file and drag Rocket to your Applications folder.
 3. Launch Rocket and get ready to code!
 
+<details>
+  <summary>“Rocket” cannot be opened because the developer cannot be verified.</summary>
+  
+  ### Are you seeing a prompt like this?
+  
+
+  <img width="275" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/6e44e053-f6b0-435d-b5a2-e6e76fbef3c2">
+
+  This is expected as I didn't sign the application using Apple Developer ID
+  > In short, Apple wants me to pay a fee to remove that prompt + publish to App Store
+
+  This will prompt only once after installation. We can override this by opening 
+  - `System Settings` > `Privacy & Security`
+  - Scroll down
+
+    
+  <img width="477" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/3714fbaa-20cb-490f-b747-0f00e7681f77">
+
+  
+  - Click `Open Anyway`
+
+    
+<img width="277" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/0d9a60a7-dfaa-4073-9d7b-971f7d2bfd67">
+
+
+- Click `Open`, don't worry. This is an open source project. It will not harm your mac or compromise your privacy.
+
+  
+</details>
+
+
+
 
 ## Contributing
 

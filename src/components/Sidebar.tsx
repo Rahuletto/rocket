@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { File, Folder } from "../types/File";
 import { open } from "@tauri-apps/api/dialog";
 import NavFiles from "./NavFiles";
-import { formatAndResolve, readAndSet, readDirectory, watch } from "../helpers/filesys";
+import { readAndSet, watch } from "../helpers/filesys";
 import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 import { listen } from "@tauri-apps/api/event";
 import { CreateFileDialog, CreateFolderDialog } from "../helpers/create";
@@ -59,7 +59,7 @@ export default function Sidebar() {
   }, [newFile, newFolder]);
 
   return (
-    <aside id="sidebar" className="w-60 shrink-0 h-full bg-transparent">
+    <aside id="sidebar" className="shrink-0 h-full bg-transparent">
       <div className="sidebar-header flex items-center justify-between p-4 py-2.5">
         <button
           id="folder-open"

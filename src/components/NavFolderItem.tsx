@@ -77,7 +77,7 @@ export default function NavFolderItem({ file, active }: Props) {
       >
         <i className="text-files">{active ? <FaFolderOpen /> : <FaFolder />}</i>
         <div className="source-header flex items-center justify-between w-full group">
-          <span onClick={onShow} className="text-[14px] w-full">
+        <span onClick={onShow} className="text-[14px] whitespace-nowrap text-ellipsis overflow-hidden" style={{overflowWrap: "anywhere"}}>
             {file.name}
           </span>
           <i

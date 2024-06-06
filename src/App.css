@@ -81,6 +81,7 @@ body {
 }
 
 
+
 ::-webkit-scrollbar-track:horizontal {
   background: var(--background-light);
 }
@@ -507,11 +508,6 @@ body {
   font-size: 14px;
 }
 
-.contexify_itemContent:nth-last-child():hover {
-  background: var(--red) !important;
-  color: var(--background) !important;
-}
-
 .contexify_itemContent:hover {
   background: var(--color) !important;
   color: var(--background) !important;
@@ -565,4 +561,7 @@ html {
 
 .margin-view-overlays {
   user-select: none;
+}
+div[data-rfd-draggable-id="left-panel"] {
+  width: -webkit-fill-available;
 }

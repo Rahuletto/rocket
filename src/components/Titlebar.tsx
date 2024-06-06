@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { appWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api";
+import { useSide } from "../provider/SideContext";
 
 export default function Titlebar() {
   const [isScaleup, setScaleup] = useState(false);
+  const { toggleSide } = useSide();
+
   const onMinimize = () => appWindow.minimize();
   const onScaleup = () => {
     appWindow.toggleMaximize();
@@ -15,10 +18,9 @@ export default function Titlebar() {
     setScaleup(false);
   };
 
-
   function openTerminal() {
-    const project = localStorage.getItem("project") || "/"
-    invoke("open_terminal", { directory: project })
+    const project = localStorage.getItem("project") || "/";
+    invoke("open_terminal", { directory: project });
   }
 
   useEffect(() => {
@@ -39,7 +41,6 @@ export default function Titlebar() {
         e.preventDefault();
         appWindow.minimize();
       }
-
     });
 
     return () => {
@@ -95,11 +96,19 @@ export default function Titlebar() {
           >
             Open
           </button>
+
           <button
             className="px-2 py-1 rounded-lg text-xs hover:bg-light"
             onClick={() => openTerminal()}
           >
             Terminal
+          </button>
+
+          <button
+            className="px-2 py-1 rounded-lg text-xs hover:bg-light"
+            onClick={() => toggleSide()}
+          >
+            Swap
           </button>
 
           <button

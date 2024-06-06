@@ -69,7 +69,7 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
               } rounded-lg flex items-center gap-2 px-2 py-0.5 text-gray-500 hover:text-gray-400 cursor-pointer`}
             >
               <FileIcon name={file.name} />
-              <span className="text-[14px]">{file.name}</span>
+              <span className="text-[14px] whitespace-nowrap text-ellipsis overflow-hidden" style={{overflowWrap: "anywhere"}}>{file.name}</span>
             </div>
           </>
         );

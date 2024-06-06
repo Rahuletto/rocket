@@ -48,7 +48,7 @@ export default function CodeEditor({ id, active, language }: Props) {
     language = Languages.find(({ name }) => name === language)?.name || "plaintext";
   }, []);
 
-  function handleEditorWillMount(monaco: typeof import("/Users/rahulmarban/Documents/Coding/rocket/node_modules/monaco-editor/esm/vs/editor/editor.api")) {
+  function handleEditorWillMount(monaco: any) {
     monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.ES2016,
       allowNonTsExtensions: true,

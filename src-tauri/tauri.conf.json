@@ -10,9 +10,30 @@
     "version": "0.1.2"
   },
   "tauri": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/Rahuletto/rocket/releases/download/v{{current_version}}/Rocket_{{current_version}}_universal.dmg"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4MUFFRUExMzY1RDcwMTEKUldRUmNGMDJvZTRhbU5YTEhqYXg0RFVJNlJNWUxrOWcrclE4WXNWZGtTSEwxTGF5UnB2YlVnNXQK"
+    },
     "macOSPrivateApi": true,
     "allowlist": {
-      "all": true
+      "fs": {
+        "all": true
+      },
+      "window": {
+        "all": false,
+        "close": true,
+        "hide": true,
+        "show": true,
+        "maximize": true,
+        "minimize": true,
+        "unmaximize": true,
+        "unminimize": true,
+        "startDragging": true
+      }
     },
     "bundle": {
       "active": true,
@@ -48,9 +69,6 @@
     },
     "security": {
       "csp": null
-    },
-    "updater": {
-      "active": false
     },
     "windows": [
       {

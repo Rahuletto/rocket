@@ -38,6 +38,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          includeUpdaterJson: true
+          updaterJsonKeepUniversal: true
           tagName: v__VERSION__
           releaseName: '🚀 Rocket v__VERSION__'
           releaseBody: 'Welcome aboard! 🚀 Rocket v__VERSION__ is here!'

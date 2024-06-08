@@ -14,7 +14,6 @@ export default function Sidebar() {
   const [newFile, setNewFile] = useState(false);
   const [newFolder, setNewFolder] = useState(false);
 
-
   const loadFile = async () => {
     const selected = await open({
       directory: true,
@@ -42,12 +41,29 @@ export default function Sidebar() {
       watch(project + "/")
     }
 
-    const unlisten = listen("file-changed", () => {
+    const watchChange = listen("file-changed", () => {
+      console.log("File changed");
       readAndSet(project + "/", setFiles);
     });
 
+    const opener = listen("open_dir", () => {
+      loadFile();
+      return;
+    });
+
+    const newFileCreate = listen("new_file", () => {
+      setNewFile(true)
+    });
+
+    const newFolderCreate = listen("new_folder", () => {
+      setNewFolder(true)
+    });
+
     return () => {
-      unlisten.then(fn => fn());
+      watchChange.then(fn => fn());
+      opener.then(fn => fn());
+      newFileCreate.then(fn => fn());
+      newFolderCreate.then(fn => fn());
     }
   }, []);
 

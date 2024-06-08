@@ -1,10 +1,12 @@
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::{thread, time::Duration};
-use tauri::Manager;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 mod fs;
+mod menu;
+
+static mut FOLDER: String = String::new();
 
 #[tauri::command]
 fn open(folder_path: &str) -> String {
@@ -44,6 +46,10 @@ fn create_folder(dir_path: &str) -> String {
 
 #[tauri::command]
 fn watch_changes(dir_path: String, app_handle: AppHandle) {
+    unsafe {
+        FOLDER = String::from(dir_path.clone());
+    }
+
     thread::spawn(move || {
         let path = std::path::PathBuf::from(&dir_path);
 
@@ -55,8 +61,8 @@ fn watch_changes(dir_path: String, app_handle: AppHandle) {
         let mut watcher: RecommendedWatcher = Watcher::new(
             tx,
             Config::default().with_poll_interval(Duration::from_secs(2)),
-        ).unwrap();
-
+        )
+        .unwrap();
 
         watcher.watch(&path, RecursiveMode::Recursive).unwrap();
 
@@ -64,9 +70,7 @@ fn watch_changes(dir_path: String, app_handle: AppHandle) {
             match rx.recv() {
                 Ok(event) => match event {
                     Ok(_payload) => {
-                        app_handle
-                            .emit_all("file-changed", "CHANGE")
-                            .unwrap();
+                        app_handle.emit_all("file-changed", "CHANGE").unwrap();
                     }
                     Err(e) => println!("Error handling event: {:?}", e),
                 },
@@ -98,6 +102,28 @@ fn open_terminal(directory: String) -> String {
 
 fn main() {
     tauri::Builder::default()
+        .menu(menu::menu_bar())
+        .on_menu_event(|event| match event.menu_item_id() {
+            "terminal" => unsafe {
+                open_terminal(FOLDER.clone());
+            },
+            "open" => {
+                event.window().emit("open_dir", String::from("open")).unwrap(); 
+            },
+            "theme" => {
+                event.window().emit("theme", String::from("theme")).unwrap(); 
+            },
+            "swap" => {
+                event.window().emit("swap", String::from("swap")).unwrap(); 
+            },
+            "new_file" => {
+                event.window().emit("new_file", String::from("file")).unwrap(); 
+            },
+            "new_folder" => {
+                event.window().emit("new_folder", String::from("folder")).unwrap(); 
+            },
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             open,
             get_contents,

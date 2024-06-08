@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { appWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api";
 import { useSide } from "../provider/SideContext";
+import { listen } from "@tauri-apps/api/event";
 
 export default function Titlebar() {
   const [isScaleup, setScaleup] = useState(false);
@@ -27,6 +28,13 @@ export default function Titlebar() {
     const html = document.querySelector("html");
     const theme = localStorage.getItem("theme");
 
+    const themeChange = listen("theme", () => {
+      setTheme();
+    });
+    const swapChange = listen("swap", () => {
+      toggleSide();
+    });
+
     if (theme === "dark") {
       html?.setAttribute("data-theme", "dark");
     } else {
@@ -45,6 +53,8 @@ export default function Titlebar() {
 
     return () => {
       window.removeEventListener("keydown", () => {});
+      swapChange.then((fn) => fn());
+      themeChange.then((fn) => fn());
     };
   }, []);
 

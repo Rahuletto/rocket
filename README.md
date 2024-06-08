@@ -2,6 +2,27 @@
 
 Welcome to Rocket, the super-fast, ultra-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
 
+## Soft Landing
+Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
+
+### What's new in v0.1.2
+- New **flat** logo
+- Added items into Menu bar, making it easier to use
+- Opted into `universal` build from `Apple Silicon`. meaning, Intel based Mac's can use
+- Optimizations and bug fixes
+- Less crashes
+
+### TODO
+- [ ] Drag and move files and folders
+- [ ] Add folders into a folder (sub-directory)
+- [ ] Functionality for Copy-Cut-Paste in files and folders
+- [ ] Squash Bugs
+- [x] Menu bar items
+- [x] Universal build
+- [x] Reorder opened files
+- [x] Resizable Folder View
+- [x] Swap positions
+
 ## Why Choose Rocket?
 
 ### ⚡ Blazing Fast
@@ -21,7 +42,7 @@ Rocket focuses on giving you the basics without the bloat:
 Rocket's interface is modern and sleek, making your coding sessions a visual treat. It’s designed to be easy on the eyes and boost your productivity.
 
 ### 🌍 Made for macOS
-Rocket is built to work seamlessly on `macOS` with `Apple Silicon`. No fuss, no muss—just smooth coding on your favorite platform.
+Rocket is built to work seamlessly on `macOS` with `Apple Silicon` and `Intel`. No fuss, no muss—just smooth coding on your favorite platform.
 
 ## The Trade-Offs
 
@@ -38,9 +59,41 @@ We love Rocket, but let's be real. it’s not perfect. Here are a few things to 
 
 Ready to get started? Here’s how to install Rocket on your Mac:
 
-1. Download the DMG file from [Github](https://github.com/Rahuletto/rocket).
+1. Download the DMG file from [Github](https://github.com/Rahuletto/rocket/releases).
 2. Open the DMG file and drag Rocket to your Applications folder.
 3. Launch Rocket and get ready to code!
+
+<details>
+  <summary>“Rocket” cannot be opened because the developer cannot be verified.</summary>
+  
+  ### Are you seeing a prompt like this?
+  
+
+  <img width="275" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/6e44e053-f6b0-435d-b5a2-e6e76fbef3c2">
+
+  This is expected as I didn't sign the application using Apple Developer ID
+  > In short, Apple wants me to pay a fee to remove that prompt + publish to App Store
+
+  This will prompt only once after installation. We can override this by opening 
+  - `System Settings` > `Privacy & Security`
+  - Scroll down
+
+    
+  <img width="477" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/3714fbaa-20cb-490f-b747-0f00e7681f77">
+
+  
+  - Click `Open Anyway`
+
+    
+<img width="277" alt="image" src="https://github.com/Rahuletto/rocket/assets/71836991/0d9a60a7-dfaa-4073-9d7b-971f7d2bfd67">
+
+
+- Click `Open`, don't worry. This is an open source project. It will not harm your mac or compromise your privacy.
+
+  
+</details>
+
+
 
 
 ## Contributing
@@ -59,7 +112,7 @@ Join our awesome community of developers:
 - [GitHub Discussions](https://github.com/Rahuletto/rocket/discussions)
 - [Discord Server](https://discord.gg/3JzDV9T5Fn)
 
-If you run into any issues or have questions, reach out on our [support channel](https://rocket.example.com/support).
+If you run into any issues or have questions, reach out on our [support channel](https://discord.gg/3JzDV9T5Fn).
 
 ## License
 

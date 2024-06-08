@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/tauri";
 import { saveFileObject } from "../stores/file";
 import { File, Folder } from "../types/File";
 import { uuid } from "./uuid";
+import { listen } from "@tauri-apps/api/event";
 
 export const readFile = (dirPath: string): Promise<string> => {
   return new Promise((resolve, reject) => {

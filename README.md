@@ -1,22 +1,25 @@
-# 🚀 Rocket
+![rocket](/public/rocket.png)
 
-Welcome to Rocket, the super-fast, ultra-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
+Welcome to Rocket, a super-fast, ram-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
 
-## Soft Landing
-Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
+> Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
 
-### What's new in v0.1.2
-- New **flat** logo
-- Added items into Menu bar, making it easier to use
-- Opted into `universal` build from `Apple Silicon`. meaning, Intel based Mac's can use
-- Optimizations and bug fixes
-- Less crashes
+### What's new in v0.2.0
+- Increased Bounding box
+- Image previews
+- Add folders into a folder (sub-directory)
+- Stricter Permissions
+- OTA Updater
 
 ### TODO
 - [ ] Drag and move files and folders
-- [ ] Add folders into a folder (sub-directory)
 - [ ] Functionality for Copy-Cut-Paste in files and folders
 - [ ] Squash Bugs
+- [x] Image previews
+- [x] Increased Bounding box
+- [x] Add folders into a folder (sub-directory)
+- [x] Stricter Permissions
+- [x] OTA Updater
 - [x] Menu bar items
 - [x] Universal build
 - [x] Reorder opened files

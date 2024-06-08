@@ -5,7 +5,8 @@ import {  FaFolder, FaFolderOpen, FaPlus } from "react-icons/fa6";
 import { TriggerEvent, useContextMenu } from "react-contexify";
 import { dirStore, isOpened } from "../stores/states";
 
-import { CreateFileDialog } from "../helpers/create";
+import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
+import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 
 interface Props {
   file: File | Folder;
@@ -17,6 +18,7 @@ export default function NavFolderItem({ file, active }: Props) {
   const [unfold, setUnfold] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [newFile, setNewFile] = useState(false);
+  const [newFolder, setNewFolder] = useState(false);
 
 
   const { show } = useContextMenu({
@@ -59,11 +61,11 @@ export default function NavFolderItem({ file, active }: Props) {
   }, [file])
 
   useEffect(() => {
-    if (newFile) {
+    if (newFile || newFolder) {
       const inp = document.getElementById("new-file");
       inp?.focus();
     }
-  }, [newFile]);
+  }, [newFile, newFolder]);
 
   return (
     <div className="source-item">
@@ -71,23 +73,37 @@ export default function NavFolderItem({ file, active }: Props) {
         onContextMenu={(e) =>
           displayMenu(e, { name: file.name, path: file.path, isFolder: true })
         }
+        onClick={onShow}
         className={`source-folder select-none ${
           active ? "bg-gray-200 border-2 border-light" : ""
         } rounded-lg flex items-center gap-2 px-2 py-0.5 text-gray-500 hover:text-gray-400 cursor-pointer`}
       >
         <i className="text-files">{active ? <FaFolderOpen /> : <FaFolder />}</i>
         <div className="source-header flex items-center justify-between w-full group">
-        <span onClick={onShow} className="text-[14px] whitespace-nowrap text-ellipsis overflow-hidden" style={{overflowWrap: "anywhere"}}>
+        <span  className="text-[14px] whitespace-nowrap w-full text-ellipsis overflow-hidden" style={{overflowWrap: "anywhere"}}>
             {file.name}
           </span>
-          <i
-            onClick={() => setNewFile(true)}
-            className="invisible group-hover:visible"
-          >
-            <FaPlus />
-          </i>
+          <div className="flex items-center gap-2 invisible group-hover:visible">
+              <button
+                onClick={() => setNewFile(true)}
+                className="whitespace-nowrap text-gray-400 text-md"
+              >
+                <BiSolidFilePlus />
+              </button>
+
+              <button
+                onClick={() => setNewFolder(true)}
+                className="whitespace-nowrap text-gray-400 text-md"
+              >
+                <BiSolidFolderPlus />
+              </button>
+            </div>
         </div>
       </div>
+
+      {newFolder ? (
+        <CreateFolderDialog path={file.path} setNewFolder={setNewFolder} />
+      ) : null}
 
       {newFile ? (
         <CreateFileDialog path={file.path} setNewFile={setNewFile} />

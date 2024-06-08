@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "Rocket",
-    "version": "0.1.2"
+    "version": "0.2.0"
   },
   "tauri": {
     "updater": {
@@ -20,9 +20,6 @@
     },
     "macOSPrivateApi": true,
     "allowlist": {
-      "fs": {
-        "all": true
-      },
       "window": {
         "all": false,
         "close": true,
@@ -33,6 +30,17 @@
         "unmaximize": true,
         "unminimize": true,
         "startDragging": true
+      },
+      "dialog": {
+        "open": true
+      },
+      "fs": {
+        "all": true
+      },
+      "protocol": {
+        "all": false,
+        "asset": true,
+        "assetScope": ["*/**"]
       }
     },
     "bundle": {

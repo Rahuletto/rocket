@@ -5,7 +5,7 @@ import {  FaFolder, FaFolderOpen, FaPlus } from "react-icons/fa6";
 import { TriggerEvent, useContextMenu } from "react-contexify";
 import { dirStore, isOpened } from "../stores/states";
 
-import { CreateFileDialog, CreateFolderDialog } from "../helpers/create";
+import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
 import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 
 interface Props {

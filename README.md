@@ -1,12 +1,12 @@
-# 🚀 Rocket
+![rocket](/public/rocket.png)
 
-Welcome to Rocket, the super-fast, ultra-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
+Welcome to Rocket, a super-fast, ram-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
 
-## Soft Landing
-Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
+> Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
 
-### What's new in v0.1.2
+### What's new in v0.2.0
 - Increased Bounding box
+- Image previews
 - Add folders into a folder (sub-directory)
 - Stricter Permissions
 - OTA Updater
@@ -15,6 +15,7 @@ Rocket has been made to Public Beta. This is meant to be a fun project but here 
 - [ ] Drag and move files and folders
 - [ ] Functionality for Copy-Cut-Paste in files and folders
 - [ ] Squash Bugs
+- [x] Image previews
 - [x] Increased Bounding box
 - [x] Add folders into a folder (sub-directory)
 - [x] Stricter Permissions

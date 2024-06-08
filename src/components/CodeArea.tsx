@@ -68,7 +68,7 @@ export default function CodeArea() {
           <Droppable droppableId="tabs" direction="horizontal">
             {(provided) => (
               <div
-                className="flex overflow-hidden whitespace-nowrap"
+                className="flex overflow-x-auto whitespace-nowrap"
                 {...provided.droppableProps}
                 ref={provided.innerRef}
               >
@@ -109,13 +109,14 @@ export default function CodeArea() {
           </Droppable>
         </DragDropContext>
       </div>
-      <div className="code-contents">
+      <div className="code-contents w-full flex flex-col justify-center items-center" style={{ height: "calc(100vh - 100px)" }}>
         {opened[0] &&
           [opened[opened.findIndex((a) => a === selected)]].map((item) => {
             const file = getFileObject(item) as File;
             if (isImage(file.name)) {
-              return <img src={file.path} />;
-            }
+              console.log("E")
+              return <img src={"asset://" + file.path} />;
+            } else {
 
             const path = file.path.split("/");
             const dot = path[path.length - 1].split(".");
@@ -127,6 +128,7 @@ export default function CodeArea() {
                 language={getMonacoLanguage(dot[dot.length - 1])}
               />
             );
+          }
           })}
       </div>
     </div>

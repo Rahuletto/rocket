@@ -5,7 +5,7 @@ import NavFiles from "./NavFiles";
 import { readAndSet, watch } from "../helpers/filesys";
 import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 import { listen } from "@tauri-apps/api/event";
-import { CreateFileDialog, CreateFolderDialog } from "../helpers/create";
+import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
 
 export default function Sidebar() {
 

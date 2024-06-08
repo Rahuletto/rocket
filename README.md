@@ -2,6 +2,27 @@
 
 Welcome to Rocket, the super-fast, ultra-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀
 
+## Soft Landing
+Rocket has been made to Public Beta. This is meant to be a fun project but here we are.
+
+### What's new in v0.1.2
+- New **flat** logo
+- Added items into Menu bar, making it easier to use
+- Opted into `universal` build from `Apple Silicon`. meaning, Intel based Mac's can use
+- Optimizations and bug fixes
+- Less crashes
+
+### TODO
+- [ ] Drag and move files and folders
+- [ ] Add folders into a folder (sub-directory)
+- [ ] Functionality for Copy-Cut-Paste in files and folders
+- [ ] Squash Bugs
+- [x] Menu bar items
+- [x] Universal build
+- [x] Reorder opened files
+- [x] Resizable Folder View
+- [x] Swap positions
+
 ## Why Choose Rocket?
 
 ### ⚡ Blazing Fast
@@ -21,7 +42,7 @@ Rocket focuses on giving you the basics without the bloat:
 Rocket's interface is modern and sleek, making your coding sessions a visual treat. It’s designed to be easy on the eyes and boost your productivity.
 
 ### 🌍 Made for macOS
-Rocket is built to work seamlessly on `macOS` with `Apple Silicon`. No fuss, no muss—just smooth coding on your favorite platform.
+Rocket is built to work seamlessly on `macOS` with `Apple Silicon` and `Intel`. No fuss, no muss—just smooth coding on your favorite platform.
 
 ## The Trade-Offs
 

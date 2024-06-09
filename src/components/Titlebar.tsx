@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { appWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api";
-import { useSide } from "../provider/SideContext";
 import { listen } from "@tauri-apps/api/event";
+import { appWindow } from "@tauri-apps/api/window";
+import { useEffect, useState } from "react";
+import { useSide } from "../provider/SideContext";
 
 export default function Titlebar() {
   const [isScaleup, setScaleup] = useState(false);
@@ -24,6 +24,7 @@ export default function Titlebar() {
     invoke("open_terminal", { directory: project });
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     const html = document.querySelector("html");
     const theme = localStorage.getItem("theme");
@@ -84,21 +85,37 @@ export default function Titlebar() {
             id="ttb-close"
             className="titlebar-icon w-3 h-3 rounded-full bg-red cursor-pointer"
             onClick={onClose}
-          ></span>
+            onKeyDown={(e) => {
+              if (e.metaKey && e.key === "q") {
+                onClose();
+              }
+            }}
+          />
 
           <span
             className="titlebar-icon w-3 h-3 rounded-full bg-yellow cursor-pointer"
             onClick={onMinimize}
-          ></span>
+            onKeyDown={(e) => {
+              if (e.metaKey && e.key === "m") {
+                onMinimize();
+              }
+            }}
+          />
 
           <span
             className="titlebar-icon w-3 h-3 rounded-full bg-green cursor-pointer"
+            onKeyDown={(e) => {
+              if (e.metaKey && e.key === "f") {
+                isScaleup ? onScaledown() : onScaleup();
+              }
+            }}
             onClick={isScaleup ? onScaledown : onScaleup}
-          ></span>
+          />
         </div>
 
         <div className="flex gap-[6px] items-center">
           <button
+            type="button"
             className="px-2 py-1 rounded-lg text-xs hover:bg-light"
             onClick={() =>
               document.querySelector<HTMLButtonElement>("#folder-open")?.click()
@@ -108,6 +125,7 @@ export default function Titlebar() {
           </button>
 
           <button
+            type="button"
             className="px-2 py-1 rounded-lg text-xs hover:bg-light"
             onClick={() => openTerminal()}
           >
@@ -115,6 +133,7 @@ export default function Titlebar() {
           </button>
 
           <button
+            type="button"
             className="px-2 py-1 rounded-lg text-xs hover:bg-light"
             onClick={() => toggleSide()}
           >
@@ -122,6 +141,7 @@ export default function Titlebar() {
           </button>
 
           <button
+            type="button"
             className="px-2 py-1 rounded-lg text-xs hover:bg-light"
             onClick={() => setTheme()}
           >
@@ -132,6 +152,8 @@ export default function Titlebar() {
 
       <div className="flex items-center gap-1 5 pl-2 w-[24px] h-[24px]">
         <svg
+          aria-label="logo"
+          role="img"
           width="512"
           height="512"
           viewBox="0 0 512 512"

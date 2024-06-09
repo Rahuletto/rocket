@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
-import type { File, Folder } from "../types/File";
-import NavFiles from "./NavFiles";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { type TriggerEvent, useContextMenu } from "react-contexify";
 import { dirStore, isOpened } from "../stores/states";
+import type { File, Folder } from "../types/File";
+import NavFiles from "./NavFiles";
 
-import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
 import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
+import { FaFolder, FaFolderOpen } from "react-icons/fa";
+import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
 
 interface Props {
   file: File | Folder;

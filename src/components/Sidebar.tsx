@@ -22,27 +22,26 @@ export default function Sidebar() {
     const project = localStorage.getItem("project");
     if (project === selected) {
       return;
-    } else {
-      localStorage.removeItem("directories");
-      localStorage.setItem("project", selected as string);
-      setProjectName(selected as string);
-
-      readAndSet(selected + "/", setFiles);
-      watch(project + "/");
     }
+    localStorage.removeItem("directories");
+    localStorage.setItem("project", selected as string);
+    setProjectName(selected as string);
+
+    readAndSet(`${selected}/`, setFiles);
+    watch(`${project}/`);
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     const project = localStorage.getItem("project");
     if (project) {
       setProjectName(project);
-      readAndSet(project + "/", setFiles);
-      watch(project + "/");
+      readAndSet(`${project}/`, setFiles);
+      watch(`${project}/`);
     }
 
     const watchChange = listen("file-changed", () => {
-      console.log("File changed");
-      readAndSet(project + "/", setFiles);
+      readAndSet(`${project}/`, setFiles);
     });
 
     const opener = listen("open_dir", () => {
@@ -77,6 +76,7 @@ export default function Sidebar() {
     <aside id="sidebar" className="shrink-0 h-full bg-transparent">
       <div className="sidebar-header flex items-center justify-between p-4 py-2.5">
         <button
+          type="button"
           id="folder-open"
           className="project-explorer text-xs uppercase font-bold opacity-70"
           onClick={loadFile}
@@ -89,6 +89,7 @@ export default function Sidebar() {
           {projectName && (
             <>
               <button
+                type="button"
                 onClick={() => setNewFile(true)}
                 className="whitespace-nowrap text-gray-400 text-md"
               >
@@ -96,6 +97,7 @@ export default function Sidebar() {
               </button>
 
               <button
+                type="button"
                 onClick={() => setNewFolder(true)}
                 className="whitespace-nowrap text-gray-400 text-md"
               >
@@ -109,7 +111,7 @@ export default function Sidebar() {
         className="code-structure overflow-auto mb-12 pb-12 px-2 pt-2"
         style={{ height: "calc(100vh - 40px)" }}
       >
-        {files && files[0] && files.length ? (
+        {files[0] && files.length ? (
           <>
             {newFolder ? (
               <CreateFolderDialog
@@ -124,6 +126,7 @@ export default function Sidebar() {
           </>
         ) : (
           <button
+            type="button"
             className="project-explorer text-lg p-6 cursor-pointer font-bold"
             onClick={loadFile}
           >

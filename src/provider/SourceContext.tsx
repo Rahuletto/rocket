@@ -38,6 +38,7 @@ export const SourceProvider = ({
     [opened],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   const setOpenedFile = useCallback(
     (ids: string[]) => {
       updateOpenedFiles(ids);
@@ -45,6 +46,7 @@ export const SourceProvider = ({
     [opened],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   const delOpenedFile = useCallback(
     (id: string) => {
       updateOpenedFiles((prevOpen) =>

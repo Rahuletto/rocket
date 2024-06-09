@@ -9,7 +9,7 @@ import NavFolderItem from "./NavFolderItem";
 interface Props {
   files: (File | Folder)[];
   visible: boolean;
-  onContextMenu?: React.MouseEventHandler<HTMLDivElement> | any;
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>;
 }
 
 export default function NavFiles({ files, visible, onContextMenu }: Props) {
@@ -30,7 +30,7 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
   }
 
   const onShow = async (
-    ev: React.MouseEvent<HTMLDivElement> | any,
+    ev: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>,
     file: File,
   ) => {
     ev.stopPropagation();

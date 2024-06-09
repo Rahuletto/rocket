@@ -1,17 +1,17 @@
-import { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useState, useContext } from "react";
+import type { ReactNode } from "react";
 
 const SideContext = createContext({
-  side: 'left',
+  side: "left",
   toggleSide: () => {},
 });
 
-export const SideProvider = ({ children }:{children: ReactNode}) => {
-  const [side, setSide] = useState<'left' | 'right'>('left');
+export const SideProvider = ({ children }: { children: ReactNode }) => {
+  const [side, setSide] = useState<"left" | "right">("left");
 
   function toggleSide() {
-    setSide(side === 'left' ? 'right' : 'left');
+    setSide(side === "left" ? "right" : "left");
   }
-
 
   return (
     <SideContext.Provider value={{ side, toggleSide }}>
@@ -21,6 +21,6 @@ export const SideProvider = ({ children }:{children: ReactNode}) => {
 };
 
 export function useSide() {
-    const { side, toggleSide } = useContext(SideContext);
-    return { side, toggleSide };
+  const { side, toggleSide } = useContext(SideContext);
+  return { side, toggleSide };
 }

@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
-import { File, Folder } from "../types/File";
 import { open } from "@tauri-apps/api/dialog";
-import NavFiles from "./NavFiles";
-import { readAndSet, watch } from "../helpers/filesys";
-import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
 import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
+import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
+import { readAndSet, watch } from "../helpers/filesys";
+import type { File, Folder } from "../types/File";
 import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
+import NavFiles from "./NavFiles";
 
 export default function Sidebar() {
-
   const [projectName, setProjectName] = useState("");
   const [files, setFiles] = useState<(File | Folder)[]>([]);
   const [newFile, setNewFile] = useState(false);
@@ -29,7 +28,7 @@ export default function Sidebar() {
       setProjectName(selected as string);
 
       readAndSet(selected + "/", setFiles);
-      watch(project + "/")
+      watch(project + "/");
     }
   };
 
@@ -38,7 +37,7 @@ export default function Sidebar() {
     if (project) {
       setProjectName(project);
       readAndSet(project + "/", setFiles);
-      watch(project + "/")
+      watch(project + "/");
     }
 
     const watchChange = listen("file-changed", () => {
@@ -52,19 +51,19 @@ export default function Sidebar() {
     });
 
     const newFileCreate = listen("new_file", () => {
-      setNewFile(true)
+      setNewFile(true);
     });
 
     const newFolderCreate = listen("new_folder", () => {
-      setNewFolder(true)
+      setNewFolder(true);
     });
 
     return () => {
-      watchChange.then(fn => fn());
-      opener.then(fn => fn());
-      newFileCreate.then(fn => fn());
-      newFolderCreate.then(fn => fn());
-    }
+      watchChange.then((fn) => fn());
+      opener.then((fn) => fn());
+      newFileCreate.then((fn) => fn());
+      newFolderCreate.then((fn) => fn());
+    };
   }, []);
 
   useEffect(() => {

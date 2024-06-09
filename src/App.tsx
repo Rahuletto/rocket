@@ -11,11 +11,12 @@ export default function App() {
   const { side } = useSide();
 
   const tabs = [
-    <Panel maxSize={50} defaultSize={15} order={1} id="left-panel">
+    <Panel key="1" maxSize={50} defaultSize={15} order={1} id="left-panel">
       <Sidebar />
     </Panel>,
 
     <Panel
+      key="2"
       minSize={50}
       style={{ height: "calc(100vh - 40px)" }}
       order={1}
@@ -36,14 +37,14 @@ export default function App() {
         style={{ height: "calc(100vh - 40px)" }}
       >
         <>
-          {side == "left" && (
+          {side === "left" && (
             <>
               {tabs[0]}
               <PanelResizeHandle className="h-full my-12 w-[2px] hover:bg-lighter active:bg-lighter" />
             </>
           )}
           {tabs[1]}
-          {side == "right" && (
+          {side === "right" && (
             <>
               <PanelResizeHandle className="h-full my-12 w-[2px] hover:bg-lighter active:bg-lighter" />
               {tabs[0]}

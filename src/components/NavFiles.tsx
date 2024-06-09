@@ -1,9 +1,10 @@
-import { TriggerEvent, useContextMenu } from "react-contexify";
+import type { TriggerEvent } from "react-contexify";
+import { useContextMenu } from "react-contexify";
 import { useSource } from "../provider/SourceContext";
-import { File, Folder } from "../types/File";
+import { setActive } from "../stores/active";
+import type { File, Folder } from "../types/File";
 import FileIcon from "./FileIcon";
 import NavFolderItem from "./NavFolderItem";
-import { setActive } from "../stores/active";
 
 interface Props {
   files: (File | Folder)[];
@@ -20,7 +21,7 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
 
   function displayMenu(
     e: TriggerEvent,
-    props: { path: string; name: string; isFile?: boolean; isFolder?: boolean }
+    props: { path: string; name: string; isFile?: boolean; isFolder?: boolean },
   ) {
     show({
       event: e,
@@ -28,7 +29,10 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
     });
   }
 
-  const onShow = async (ev: React.MouseEvent<HTMLDivElement>, file: File) => {
+  const onShow = async (
+    ev: React.MouseEvent<HTMLDivElement> | any,
+    file: File,
+  ) => {
     ev.stopPropagation();
 
     if (file.kind === "file") {
@@ -64,12 +68,22 @@ export default function NavFiles({ files, visible, onContextMenu }: Props) {
                       })
               }
               key={file.id}
+              onKeyDown={(ev) => {
+                if (ev.key === "Enter") {
+                  onShow(ev, file);
+                }
+              }}
               className={`soure-item select-none ${
                 isSelected ? "source-item-active bg-lighter" : ""
               } rounded-lg flex items-center gap-2 px-2 py-0.5 text-gray-500 hover:text-gray-400 cursor-pointer`}
             >
               <FileIcon name={file.name} />
-              <span className="text-[14px] whitespace-nowrap text-ellipsis overflow-hidden" style={{overflowWrap: "anywhere"}}>{file.name}</span>
+              <span
+                className="text-[14px] whitespace-nowrap text-ellipsis overflow-hidden"
+                style={{ overflowWrap: "anywhere" }}
+              >
+                {file.name}
+              </span>
             </div>
           </>
         );

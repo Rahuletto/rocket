@@ -38,6 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.GITHUB_TAURI }}
+          TAURI_KEY_PASSWORD: ${{ secrets.GITHUB_PASSWORD }}
         with:
           includeUpdaterJson: true
           updaterJsonKeepUniversal: true

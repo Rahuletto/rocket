@@ -15,7 +15,7 @@ import {
 import { HiGif } from "react-icons/hi2";
 import { ImSvg } from "react-icons/im";
 import { IoLogoNodejs } from "react-icons/io5";
-import { IconProps } from "../types/Icon";
+import type { IconProps } from "../types/Icon";
 
 const icons: { [key: string]: JSX.Element } = {
   tsx: <FaReact color="#3178C6" />,

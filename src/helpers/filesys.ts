@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/tauri";
 
-import { saveFileObject } from "../stores/file";
-import { File, Folder } from "../types/File";
-import { uuid } from "./uuid";
 import { listen } from "@tauri-apps/api/event";
+import { saveFileObject } from "../stores/file";
+import type { File, Folder } from "../types/File";
+import { uuid } from "./uuid";
 
 export const readFile = (dirPath: string): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -53,7 +53,7 @@ export const createFolder = (dirPath: string): Promise<boolean> => {
 
 export const writeFile = (
   dirPath: string,
-  content: string
+  content: string,
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     invoke("write", { dirPath, content }).then((message: unknown) => {
@@ -67,9 +67,9 @@ export const writeFile = (
 };
 
 export const readDirectory = (
-  folderPath: string
+  folderPath: string,
 ): Promise<(File | Folder)[]> => {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve) => {
     invoke("open", { folderPath }).then((message: unknown) => {
       formatAndResolve(message).then((resolver) => {
         resolve(resolver);
@@ -80,7 +80,7 @@ export const readDirectory = (
 
 export const readAndSet = (
   folderPath: string,
-  setFiles: React.Dispatch<React.SetStateAction<(File | Folder)[]>>
+  setFiles: React.Dispatch<React.SetStateAction<(File | Folder)[]>>,
 ) => {
   invoke("open", { folderPath }).then((message: unknown) => {
     formatAndResolve(message).then((resolver) => {
@@ -91,7 +91,7 @@ export const readAndSet = (
 
 export const watch = (folderPath: string) => {
   invoke("watch_changes", { dirPath: folderPath });
-}
+};
 
 export async function formatAndResolve(message: unknown) {
   const mess = message as string;
@@ -112,11 +112,10 @@ export async function formatAndResolve(message: unknown) {
         kind: "directory",
         name: file.name,
         path: file.path,
-        children: fileSort(await readDirectory(file.path + "/")),
+        children: fileSort(await readDirectory(`${file.path}/`)),
       };
       folders.push(entry);
       saveFileObject(id, entry);
-      continue;
     } else if (file.kind === "file") {
       const entry: File = {
         id,
@@ -133,18 +132,25 @@ export async function formatAndResolve(message: unknown) {
 }
 
 function fileSort(items: (File | Folder)[]): (File | Folder)[] {
-  const files = items.filter(item => item.kind === 'file' && !item.name.includes('.git') && !item.name.includes('.DS_Store'));
-  const directories = items.filter(item => item.kind === 'directory');
+  const files = items.filter(
+    (item) =>
+      item.kind === "file" &&
+      !item.name.includes(".git") &&
+      !item.name.includes(".DS_Store"),
+  );
+  const directories = items.filter((item) => item.kind === "directory");
 
-  const sortedDirectories: (File|Folder)[] = directories.sort((a, b) => a.name.localeCompare(b.name));
+  const sortedDirectories: (File | Folder)[] = directories.sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   const sortedFiles = files.sort((a, b) => {
-      const isDotFileA = a.name.startsWith('.');
-      const isDotFileB = b.name.startsWith('.');
+    const isDotFileA = a.name.startsWith(".");
+    const isDotFileB = b.name.startsWith(".");
 
-      if (isDotFileA && !isDotFileB) return -1;
-      if (!isDotFileA && isDotFileB) return 1;
+    if (isDotFileA && !isDotFileB) return -1;
+    if (!isDotFileA && isDotFileB) return 1;
 
-      return a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
   });
 
   return sortedDirectories.concat(sortedFiles);

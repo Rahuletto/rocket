@@ -1,18 +1,18 @@
-import { File } from "../types/File";
-import { useSource } from "../provider/SourceContext";
-import { getFileObject } from "../stores/file";
-import FileIcon from "./FileIcon";
-import useHorizontalScroll from "../helpers/useHorizontalScroll";
-
-import CodeEditor from "./CodeEditor";
+import type { DropResult } from "@hello-pangea/dnd";
+import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { IoClose } from "react-icons/io5";
 import { getMonacoLanguage } from "../helpers/language";
-import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { reorder } from "../helpers/reorder";
+import { useSource } from "../provider/SourceContext";
+import { getFileObject } from "../stores/file";
+import type { File } from "../types/File";
+import CodeEditor from "./CodeEditor";
+import FileIcon from "./FileIcon";
 
 export default function CodeArea() {
-  const { opened, selected, setSelect, delOpenedFile, setOpenedFile } = useSource();
-  const scrollRef = useHorizontalScroll();
+  const { opened, selected, setSelect, delOpenedFile, setOpenedFile } =
+    useSource();
+
   const onSelectItem = (id: string) => {
     setSelect("");
     setSelect(id);
@@ -20,13 +20,16 @@ export default function CodeArea() {
 
   const isImage = (name: string) => {
     return [".png", ".gif", ".jpeg", ".jpg", ".bmp"].some(
-      (ext) => name.lastIndexOf(ext) !== -1
+      (ext) => name.lastIndexOf(ext) !== -1,
     );
   };
-  const close = (ev: React.MouseEvent<HTMLElement, MouseEvent>, id: string) => {
+  const close = (
+    ev: React.MouseEvent<HTMLElement, MouseEvent> | React.KeyboardEvent,
+    id: string,
+  ) => {
     ev.stopPropagation();
-    let selectedIndex = opened.findIndex((a) => a === selected);
-    let closingIndex = opened.findIndex((a) => a === id);
+    const selectedIndex = opened.findIndex((a) => a === selected);
+    const closingIndex = opened.findIndex((a) => a === id);
 
     if (selectedIndex !== -1) {
       if (selectedIndex === closingIndex) {
@@ -41,14 +44,14 @@ export default function CodeArea() {
     delOpenedFile(id);
   };
 
-  const onDragEnd = (result: any) => {
+  const onDragEnd = (result: DropResult) => {
     if (!result.destination) {
       return;
     }
     const newTabs = reorder(
       opened,
       result.source.index,
-      result.destination.index
+      result.destination.index,
     );
 
     setOpenedFile(newTabs);
@@ -60,7 +63,6 @@ export default function CodeArea() {
       className="w-full h-full bg-light rounded-t-xl rounded-br-[12px]"
     >
       <div
-        ref={scrollRef}
         className="select-none code-tab-items flex items-center overflow-x-auto p-2 gap-2"
         style={{ width: "calc(100vw - 250px)" }}
       >
@@ -92,6 +94,11 @@ export default function CodeArea() {
                             <FileIcon name={file.name} size="sm" />
                             <span className="text-[14px]">{file.name}</span>
                             <i
+                              onKeyDown={(ev) => {
+                                if (ev.metaKey && ev.key === "w") {
+                                  close(ev, item);
+                                }
+                              }}
                               onClick={(ev) => close(ev, item)}
                               className="hover:text-red"
                             >
@@ -109,15 +116,17 @@ export default function CodeArea() {
           </Droppable>
         </DragDropContext>
       </div>
-      <div className="code-contents w-full flex flex-col justify-center items-center" style={{ height: "calc(100vh - 100px)" }}>
+      <div
+        className="code-contents w-full flex flex-col justify-center items-center"
+        style={{ height: "calc(100vh - 100px)" }}
+      >
         {opened[0] &&
           [opened[opened.findIndex((a) => a === selected)]].map((item) => {
             const file = getFileObject(item) as File;
             if (isImage(file.name)) {
-              console.log("E")
-              return <img src={"asset://" + file.path} />;
-            } else {
-
+              console.log("E");
+              return <img alt={file.name} src={`asset://${file.path}`} />;
+            }
             const path = file.path.split("/");
             const dot = path[path.length - 1].split(".");
             return (
@@ -128,7 +137,6 @@ export default function CodeArea() {
                 language={getMonacoLanguage(dot[dot.length - 1])}
               />
             );
-          }
           })}
       </div>
     </div>

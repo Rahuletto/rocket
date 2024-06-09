@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FaFile, FaFolder } from "react-icons/fa6";
 import { saveFileObject } from "../stores/file";
-import { Folder, File } from "../types/File";
+import type { Folder, File } from "../types/File";
 import { writeFile, createFolder } from "../helpers/filesys";
 import { uuid } from "../helpers/uuid";
 

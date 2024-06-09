@@ -108,20 +108,29 @@ fn main() {
                 open_terminal(FOLDER.clone());
             },
             "open" => {
-                event.window().emit("open_dir", String::from("open")).unwrap(); 
-            },
+                event
+                    .window()
+                    .emit("open_dir", String::from("open"))
+                    .unwrap();
+            }
             "theme" => {
-                event.window().emit("theme", String::from("theme")).unwrap(); 
-            },
+                event.window().emit("theme", String::from("theme")).unwrap();
+            }
             "swap" => {
-                event.window().emit("swap", String::from("swap")).unwrap(); 
-            },
+                event.window().emit("swap", String::from("swap")).unwrap();
+            }
             "new_file" => {
-                event.window().emit("new_file", String::from("file")).unwrap(); 
-            },
+                event
+                    .window()
+                    .emit("new_file", String::from("file"))
+                    .unwrap();
+            }
             "new_folder" => {
-                event.window().emit("new_folder", String::from("folder")).unwrap(); 
-            },
+                event
+                    .window()
+                    .emit("new_folder", String::from("folder"))
+                    .unwrap();
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![

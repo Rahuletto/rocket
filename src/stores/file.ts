@@ -1,16 +1,15 @@
-import { File, Folder } from "../types/File"
+import type { File, Folder } from "../types/File";
 
 interface Entries {
-  [key: string]: File | Folder
+  [key: string]: File | Folder;
 }
 
-const entries: Entries = {}
+const entries: Entries = {};
 
 export const saveFileObject = (id: string, file: File | Folder): void => {
-  entries[id] = file
-}
+  entries[id] = file;
+};
 
 export const getFileObject = (id: string): File | Folder => {
-  return entries[id]
-}
-
+  return entries[id];
+};

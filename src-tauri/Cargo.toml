@@ -6,19 +6,22 @@ authors = ["rahuletto"]
 license = ""
 repository = "https://github.com/Rahuletto/rocket"
 edition = "2021"
-rust-version = "1.57"
+rust-version = "1.77.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.1", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 filetime = "^0.2.22"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.1", features = [ "dialog-open", "protocol-asset", "fs-all", "window-hide", "window-close", "window-start-dragging", "window-minimize", "window-show", "window-maximize", "window-unminimize", "window-unmaximize", "updater", "macos-private-api"] }
+tauri = { version = "2", features = [ "protocol-asset", "macos-private-api"] }
+tauri-plugin-dialog = "2.7.1"
 notify = "5.0"
+gix = { version = "0.85.0", features = ["status"] }
+portable-pty = "0.9.0"
 
 [features]
 # by default Tauri runs in production mode

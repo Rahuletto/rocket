@@ -2,82 +2,59 @@
   "build": {
     "beforeDevCommand": "bun run dev",
     "beforeBuildCommand": "bun run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "Rocket",
-    "version": "0.2.0"
-  },
-  "tauri": {
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/Rahuletto/rocket/releases/download/v{{current_version}}/latest.json"
-      ],
-      "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4MUFFRUExMzY1RDcwMTEKUldRUmNGMDJvZTRhbU5YTEhqYXg0RFVJNlJNWUxrOWcrclE4WXNWZGtTSEwxTGF5UnB2YlVnNXQK"
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "",
+    "targets": "all",
+    "externalBin": [],
+    "icon": [
+      "icons/32x32.png",
+      "icons/512x512.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
     },
-    "macOSPrivateApi": true,
-    "allowlist": {
-      "window": {
-        "all": false,
-        "close": true,
-        "hide": true,
-        "show": true,
-        "maximize": true,
-        "minimize": true,
-        "unmaximize": true,
-        "unminimize": true,
-        "startDragging": true
-      },
-      "dialog": {
-        "open": true
-      },
-      "fs": {
-        "all": true
-      },
-      "protocol": {
-        "all": false,
-        "asset": true,
-        "assetScope": ["*/**"]
-      }
+    "longDescription": "A super-fast, ram-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀",
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
     },
-    "bundle": {
-      "active": true,
-      "category": "DeveloperTool",
-      "copyright": "",
+    "resources": [],
+    "shortDescription": "Ship your code with Rocket",
+    "linux": {
       "deb": {
         "depends": []
-      },
-      "externalBin": [],
-      "icon": [
-        "icons/32x32.png",
-        "icons/512x512.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.rocket.dev",
-      "longDescription": "A super-fast, ram-efficient, and lightweight code editor that's ready to ship your code to the next level! 🚀",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
-      "resources": [],
-      "shortDescription": "Ship your code with Rocket",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": ""
       }
     },
+    "createUpdaterArtifacts": "v1Compatible"
+  },
+  "productName": "Rocket",
+  "mainBinaryName": "Rocket",
+  "version": "0.2.0",
+  "identifier": "com.rocket.dev",
+  "plugins": {},
+  "app": {
     "security": {
+      "assetProtocol": {
+        "scope": [
+          "*/**"
+        ],
+        "enable": true
+      },
       "csp": null
     },
+    "macOSPrivateApi": true,
     "windows": [
       {
         "fullscreen": false,
@@ -86,7 +63,8 @@
         "title": "Rocket",
         "width": 1280,
         "transparent": true,
-        "decorations": false
+        "decorations": false,
+        "useHttpsScheme": true
       }
     ]
   }

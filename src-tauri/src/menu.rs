@@ -1,102 +1,96 @@
-use tauri::{AboutMetadata, CustomMenuItem, Menu, MenuItem, Submenu};
+use tauri::{
+    menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+    AppHandle,
+};
 
-pub fn menu_bar() -> Menu {
-    let app_name = "Rocket";
-    let mut menu = Menu::new();
-    #[cfg(target_os = "macos")]
-    {
-        menu = menu.add_submenu(Submenu::new(
-            app_name,
-            Menu::new()
-                .add_native_item(MenuItem::About(
-                    app_name.to_string(),
-                    AboutMetadata::default(),
-                ))
-                .add_native_item(MenuItem::Separator)
-                .add_native_item(MenuItem::Hide)
-                .add_native_item(MenuItem::HideOthers)
-                .add_native_item(MenuItem::ShowAll)
-                .add_native_item(MenuItem::Separator)
-                .add_native_item(MenuItem::Quit),
-        ));
-    }
+pub fn menu_bar(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    // File Items
+    let new_file = MenuItemBuilder::new("New File")
+        .id("new_file")
+        .accelerator("CmdOrCtrl+N")
+        .build(app)?;
+    let new_folder = MenuItemBuilder::new("New Folder")
+        .id("new_folder")
+        .accelerator("CmdOrCtrl+Shift+N")
+        .build(app)?;
+    let open_folder = MenuItemBuilder::new("Open Folder...")
+        .id("open")
+        .accelerator("CmdOrCtrl+O")
+        .build(app)?;
+    let save_file = MenuItemBuilder::new("Save")
+        .id("save")
+        .accelerator("CmdOrCtrl+S")
+        .build(app)?;
 
-    let mut file_menu = Menu::new();
-    file_menu = file_menu
-        .add_item(CustomMenuItem::new("new_file".to_string(), "New File"))
-        .add_item(CustomMenuItem::new("new_folder".to_string(), "New Folder"))
-        .add_native_item(MenuItem::Separator)
-        .add_item(CustomMenuItem::new("open".to_string(), "Open Folder"))
-        .add_native_item(MenuItem::Separator)
-        .add_item(CustomMenuItem::new("save".to_string(), "Save").accelerator("Command+S"))
-        .add_item(
-            CustomMenuItem::new("auto_save".to_string(), "Auto Save")
-                .selected()
-                .disabled(),
-        )
-        .add_native_item(MenuItem::Separator)
-        .add_native_item(MenuItem::CloseWindow);
+    let file = SubmenuBuilder::new(app, "File")
+        .item(&new_file)
+        .item(&new_folder)
+        .separator()
+        .item(&open_folder)
+        .separator()
+        .item(&save_file)
+        .separator()
+        .close_window()
+        .build()?;
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        file_menu = file_menu.add_native_item(MenuItem::Quit);
-    }
+    // Edit Items
+    let edit = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
 
-    menu = menu.add_submenu(Submenu::new("File", file_menu));
+    // View Items
+    let swap_layout = MenuItemBuilder::new("Swap Sidebar Position")
+        .id("swap")
+        .accelerator("CmdOrCtrl+Alt+S")
+        .build(app)?;
+    let toggle_theme = MenuItemBuilder::new("Toggle Theme")
+        .id("theme")
+        .accelerator("CmdOrCtrl+T")
+        .build(app)?;
+    let toggle_sidebar = MenuItemBuilder::new("Toggle Side Bar")
+        .id("toggle_sidebar")
+        .accelerator("CmdOrCtrl+B")
+        .build(app)?;
+    let toggle_terminal = MenuItemBuilder::new("Toggle Terminal")
+        .id("terminal")
+        .accelerator("CmdOrCtrl+J")
+        .build(app)?;
+    let toggle_agent = MenuItemBuilder::new("Toggle Agent Panel")
+        .id("toggle_agent")
+        .accelerator("CmdOrCtrl+Shift+A")
+        .build(app)?;
 
-    #[cfg(not(target_os = "linux"))]
-    let mut edit_menu = Menu::new();
-    #[cfg(target_os = "macos")]
-    {
-        edit_menu = edit_menu
-            .add_native_item(MenuItem::Undo)
-            .add_native_item(MenuItem::Redo)
-            .add_native_item(MenuItem::Separator);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        edit_menu = edit_menu
-            .add_native_item(MenuItem::Cut)
-            .add_native_item(MenuItem::Copy)
-            .add_native_item(MenuItem::Paste);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        edit_menu = edit_menu.add_native_item(MenuItem::SelectAll);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        menu = menu.add_submenu(Submenu::new("Edit", edit_menu));
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let mut view_menu = Menu::new();
+    let view = SubmenuBuilder::new(app, "View")
+        .item(&swap_layout)
+        .item(&toggle_theme)
+        .separator()
+        .item(&toggle_sidebar)
+        .item(&toggle_terminal)
+        .item(&toggle_agent)
+        .separator()
+        .fullscreen()
+        .build()?;
 
-        view_menu = view_menu
-            .add_item(CustomMenuItem::new("swap".to_string(), "Swap Layout"))
-            .add_item(CustomMenuItem::new("theme".to_string(), "Change Theme"))
-            .add_native_item(MenuItem::Separator)
-            .add_native_item(MenuItem::EnterFullScreen);
+    // Terminal Items
+    let new_terminal = MenuItemBuilder::new("New Terminal")
+        .id("terminal")
+        .accelerator("CmdOrCtrl+Shift+`")
+        .build(app)?;
 
-        menu = menu.add_submenu(Submenu::new("View", view_menu));
-    }
+    let terminal = SubmenuBuilder::new(app, "Terminal")
+        .item(&new_terminal)
+        .build()?;
 
-    let mut window_menu = Menu::new();
-    window_menu = window_menu.add_native_item(MenuItem::Minimize);
-    #[cfg(target_os = "macos")]
-    {
-        window_menu = window_menu.add_native_item(MenuItem::Separator);
-    }
-    window_menu = window_menu
-        .add_native_item(MenuItem::CloseWindow)
-        .add_native_item(MenuItem::Quit);
-    menu = menu.add_submenu(Submenu::new("Window", window_menu));
-
-    let mut terminal_menu = Menu::new();
-    terminal_menu =
-        terminal_menu.add_item(CustomMenuItem::new("terminal".to_string(), "New Terminal"));
-
-    menu = menu.add_submenu(Submenu::new("Terminal", terminal_menu));
-
-    menu
+    MenuBuilder::new(app)
+        .item(&file)
+        .item(&edit)
+        .item(&view)
+        .item(&terminal)
+        .build()
 }

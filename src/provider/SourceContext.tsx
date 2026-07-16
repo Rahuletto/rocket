@@ -1,93 +1,122 @@
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
+import { getFileObjectByPath } from "../stores/file";
+import {
+  closeSourceFile,
+  openSourceFile,
+  replaceSourceFiles,
+  type SourceState,
+} from "./sourceState";
 
-interface SourceContext {
-  selected: string;
-  setSelect: (id: string) => void;
-  opened: string[];
+import type { File, Folder } from "../types/File";
+
+interface SourceContextValue {
   addOpenedFile: (id: string) => void;
   delOpenedFile: (id: string) => void;
+  opened: string[];
+  openFileByPath: (path: string) => void;
+  selected: string;
   setOpenedFile: (ids: string[]) => void;
+  setSelect: (id: string) => void;
+  files: (File | Folder)[];
+  setFiles: React.Dispatch<React.SetStateAction<(File | Folder)[]>>;
+  projectName: string;
+  setProjectName: React.Dispatch<React.SetStateAction<string>>;
+  quickViewPath: string | null;
+  setQuickViewPath: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const SourceContext = createContext<SourceContext>({
-  selected: "",
-  setSelect: (id) => {},
-  opened: [],
-  addOpenedFile: (id) => {},
-  delOpenedFile: (id) => {},
-  setOpenedFile: (ids) => {},
-});
+const SourceContext = createContext<SourceContextValue | null>(null);
 
-export const SourceProvider = ({
-  children,
-}: {
-  children: JSX.Element | JSX.Element[];
-}) => {
-  const [selected, setSelected] = useState("");
-  const [opened, updateOpenedFiles] = useState<string[]>([]);
-
-  const setSelect = (id: string) => {
-    setSelected(id);
-  };
+export function SourceProvider({ children }: { children: ReactNode }) {
+  const [quickViewPath, setQuickViewPath] = useState<string | null>(null);
+  const [files, setFiles] = useState<(File | Folder)[]>([]);
+  const [projectName, setProjectName] = useState("");
+  const [state, setState] = useState<SourceState>({
+    opened: [],
+    selected: "",
+  });
 
   const addOpenedFile = useCallback(
-    (id: string) => {
-      if (opened.includes(id)) return;
-      updateOpenedFiles((prevOpen) => [...prevOpen, id]);
-    },
-    [opened],
+    (id: string) => setState((current) => openSourceFile(current, id)),
+    [],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
-  const setOpenedFile = useCallback(
-    (ids: string[]) => {
-      updateOpenedFiles(ids);
-    },
-    [opened],
-  );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   const delOpenedFile = useCallback(
-    (id: string) => {
-      updateOpenedFiles((prevOpen) =>
-        prevOpen.filter((opened) => opened !== id),
-      );
+    (id: string) => setState((current) => closeSourceFile(current, id)),
+    [],
+  );
+
+  const setOpenedFile = useCallback(
+    (ids: string[]) =>
+      setState((current) => replaceSourceFiles(current, ids)),
+    [],
+  );
+
+  const openFileByPath = useCallback(
+    (path: string) => {
+      const project = localStorage.getItem("project");
+      const absolutePath =
+        project && !path.startsWith("/") ? `${project}/${path}` : path;
+      const file = getFileObjectByPath(absolutePath);
+      if (!file || file.kind !== "file") return;
+
+      setState((current) => openSourceFile(current, file.id));
     },
-    [opened],
+    [],
+  );
+
+  const value = useMemo<SourceContextValue>(
+    () => ({
+      addOpenedFile,
+      delOpenedFile,
+      opened: state.opened,
+      openFileByPath,
+      selected: state.selected,
+      setOpenedFile,
+      setSelect: (id) =>
+        setState((current) =>
+          current.selected === id
+            ? current
+            : current.opened.includes(id)
+            ? { ...current, selected: id }
+            : openSourceFile(current, id),
+        ),
+      files,
+      setFiles,
+      projectName,
+      setProjectName,
+      quickViewPath,
+      setQuickViewPath,
+    }),
+    [
+      addOpenedFile,
+      delOpenedFile,
+      openFileByPath,
+      setOpenedFile,
+      state.opened,
+      state.selected,
+      files,
+      projectName,
+      quickViewPath,
+    ],
   );
 
   return (
-    <SourceContext.Provider
-      value={{
-        selected,
-        setSelect,
-        opened,
-        addOpenedFile,
-        delOpenedFile,
-        setOpenedFile,
-      }}
-    >
-      {children}
-    </SourceContext.Provider>
+    <SourceContext.Provider value={value}>{children}</SourceContext.Provider>
   );
-};
+}
 
-export const useSource = () => {
-  const {
-    selected,
-    setSelect,
-    opened,
-    addOpenedFile,
-    delOpenedFile,
-    setOpenedFile,
-  } = useContext(SourceContext);
-
-  return {
-    selected,
-    setSelect,
-    opened,
-    addOpenedFile,
-    delOpenedFile,
-    setOpenedFile,
-  };
-};
+export function useSource() {
+  const context = useContext(SourceContext);
+  if (!context) {
+    throw new Error("useSource must be used inside SourceProvider");
+  }
+  return context;
+}

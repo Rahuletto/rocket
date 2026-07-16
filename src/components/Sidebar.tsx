@@ -1,15 +1,16 @@
-import { open } from "@tauri-apps/api/dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { BiSolidFilePlus, BiSolidFolderPlus } from "react-icons/bi";
+import { FilePlus2, FolderPlus, FolderOpen } from "lucide-react";
 import { readAndSet, watch } from "../helpers/filesys";
+import { disposeListener } from "../helpers/events";
 import type { File, Folder } from "../types/File";
 import { CreateFileDialog, CreateFolderDialog } from "./CreateDir";
-import NavFiles from "./NavFiles";
+import ProjectTree from "./workbench/ProjectTree";
+import { useSource } from "../provider/SourceContext";
 
 export default function Sidebar() {
-  const [projectName, setProjectName] = useState("");
-  const [files, setFiles] = useState<(File | Folder)[]>([]);
+  const { files, setFiles, projectName, setProjectName } = useSource();
   const [newFile, setNewFile] = useState(false);
   const [newFolder, setNewFolder] = useState(false);
 
@@ -19,16 +20,18 @@ export default function Sidebar() {
     });
 
     if (!selected) return;
+    const selectedPath = selected as string;
     const project = localStorage.getItem("project");
-    if (project === selected) {
+    if (project === selectedPath) {
       return;
     }
     localStorage.removeItem("directories");
-    localStorage.setItem("project", selected as string);
-    setProjectName(selected as string);
+    localStorage.setItem("project", selectedPath);
+    setProjectName(selectedPath);
+    window.dispatchEvent(new Event("rocket-workspace-changed"));
 
-    readAndSet(`${selected}/`, setFiles);
-    watch(`${project}/`);
+    readAndSet(`${selectedPath}/`, setFiles);
+    watch(`${selectedPath}/`);
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -41,7 +44,10 @@ export default function Sidebar() {
     }
 
     const watchChange = listen("file-changed", () => {
-      readAndSet(`${project}/`, setFiles);
+      const currentProject = localStorage.getItem("project");
+      if (currentProject) {
+        readAndSet(`${currentProject}/`, setFiles);
+      }
     });
 
     const opener = listen("open_dir", () => {
@@ -58,10 +64,10 @@ export default function Sidebar() {
     });
 
     return () => {
-      watchChange.then((fn) => fn());
-      opener.then((fn) => fn());
-      newFileCreate.then((fn) => fn());
-      newFolderCreate.then((fn) => fn());
+      disposeListener(watchChange);
+      disposeListener(opener);
+      disposeListener(newFileCreate);
+      disposeListener(newFolderCreate);
     };
   }, []);
 
@@ -73,44 +79,45 @@ export default function Sidebar() {
   }, [newFile, newFolder]);
 
   return (
-    <aside id="sidebar" className="shrink-0 h-full bg-transparent">
-      <div className="sidebar-header flex items-center justify-between p-4 py-2.5">
+    <aside id="sidebar" className="workspace-panel explorer-panel">
+      <header className="workspace-panel-header">
         <button
           type="button"
           id="folder-open"
-          className="project-explorer text-xs uppercase font-bold opacity-70"
+          className="project-explorer"
           onClick={loadFile}
+          title="Open folder"
         >
+          <FolderOpen size={13} />
           {projectName
             ? projectName.split("/")[projectName.split("/").length - 1]
-            : "File explorer"}
+            : "Explorer"}
         </button>
-        <div className="flex gap-2">
+        <div className="workspace-panel-actions">
           {projectName && (
             <>
               <button
+                aria-label="New file"
                 type="button"
                 onClick={() => setNewFile(true)}
-                className="whitespace-nowrap text-gray-400 text-md"
+                title="New file"
               >
-                <BiSolidFilePlus />
+                <FilePlus2 size={14} />
               </button>
 
               <button
+                aria-label="New folder"
                 type="button"
                 onClick={() => setNewFolder(true)}
-                className="whitespace-nowrap text-gray-400 text-md"
+                title="New folder"
               >
-                <BiSolidFolderPlus />
+                <FolderPlus size={14} />
               </button>
             </>
           )}
         </div>
-      </div>
-      <div
-        className="code-structure overflow-auto mb-12 pb-12 px-2 pt-2"
-        style={{ height: "calc(100vh - 40px)" }}
-      >
+      </header>
+      <div className="code-structure">
         {files[0] && files.length ? (
           <>
             {newFolder ? (
@@ -119,7 +126,7 @@ export default function Sidebar() {
                 setNewFolder={setNewFolder}
               />
             ) : null}
-            <NavFiles visible={true} files={files} />
+            <ProjectTree entries={files} project={projectName} />
             {newFile ? (
               <CreateFileDialog path={projectName} setNewFile={setNewFile} />
             ) : null}
@@ -127,9 +134,10 @@ export default function Sidebar() {
         ) : (
           <button
             type="button"
-            className="project-explorer text-lg p-6 cursor-pointer font-bold"
+            className="explorer-empty"
             onClick={loadFile}
           >
+            <FolderOpen size={22} />
             Open a folder
           </button>
         )}

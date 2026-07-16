@@ -1,127 +1,81 @@
-import { invoke } from "@tauri-apps/api/tauri";
-
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { saveFileObject } from "../stores/file";
 import type { File, Folder } from "../types/File";
 import { uuid } from "./uuid";
 
-export const readFile = (dirPath: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    invoke("get_contents", { dirPath })
-      .then((message: unknown) => {
-        resolve(message as string);
-      })
-      .catch((error) => reject(error));
-  });
+interface RawEntry {
+  kind: "directory" | "file";
+  name: string;
+  path: string;
+}
+
+export const readFile = (dirPath: string): Promise<string> =>
+  invoke<string>("get_contents", { dirPath });
+
+export const deleteFile = async (dirPath: string): Promise<boolean> => {
+  await invoke("delete_file", { dirPath });
+  return true;
 };
 
-export const deleteFile = (dirPath: string): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    invoke("delete_file", { dirPath }).then((message: unknown) => {
-      if (message === "Success") {
-        resolve(true);
-      } else {
-        reject(false);
-      }
-    });
-  });
+export const deleteFolder = async (dirPath: string): Promise<boolean> => {
+  await invoke("delete_folder", { dirPath });
+  return true;
 };
 
-export const deleteFolder = (dirPath: string): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    invoke("delete_folder", { dirPath }).then((message: unknown) => {
-      if (message === "Success") {
-        resolve(true);
-      } else {
-        reject(false);
-      }
-    });
-  });
+export const createFolder = async (dirPath: string): Promise<boolean> => {
+  await invoke("create_folder", { dirPath });
+  return true;
 };
 
-export const createFolder = (dirPath: string): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    invoke("create_folder", { dirPath }).then((message: unknown) => {
-      if (message === "Success") {
-        resolve(true);
-      } else {
-        reject(false);
-      }
-    });
-  });
-};
-
-export const writeFile = (
+export const writeFile = async (
   dirPath: string,
   content: string,
 ): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    invoke("write", { dirPath, content }).then((message: unknown) => {
-      if (message === "Success") {
-        resolve(message as string);
-      } else {
-        reject("Crash!");
-      }
-    });
-  });
+  await invoke("write", { content, dirPath });
+  return "Success";
 };
 
-export const readDirectory = (
+export const readDirectory = async (
   folderPath: string,
 ): Promise<(File | Folder)[]> => {
-  return new Promise((resolve) => {
-    invoke("open", { folderPath }).then((message: unknown) => {
-      formatAndResolve(message).then((resolver) => {
-        resolve(resolver);
-      });
-    });
-  });
+  const entries = await invoke<RawEntry[]>("open", { folderPath });
+  return formatAndResolve(entries);
 };
 
-export const readAndSet = (
+export const readAndSet = async (
   folderPath: string,
   setFiles: React.Dispatch<React.SetStateAction<(File | Folder)[]>>,
 ) => {
-  invoke("open", { folderPath }).then((message: unknown) => {
-    formatAndResolve(message).then((resolver) => {
-      setFiles(resolver);
-    });
-  });
+  const entries = await invoke<RawEntry[]>("open", { folderPath });
+  setFiles(await formatAndResolve(entries));
 };
 
-export const watch = (folderPath: string) => {
+export const watch = (folderPath: string): Promise<void> =>
   invoke("watch_changes", { dirPath: folderPath });
-};
 
-export async function formatAndResolve(message: unknown) {
-  const mess = message as string;
-  const files = JSON.parse(mess.replaceAll("\\", "/").replaceAll("//", "/"));
+export async function formatAndResolve(files: RawEntry[]) {
   const entries: File[] = [];
   const folders: Folder[] = [];
 
-  if (!files || !files.length) {
-    return entries;
-  }
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const id = uuid(file.path);
+  for (const file of files) {
+    const path = file.path.replaceAll("\\", "/");
+    const id = uuid(path);
     if (file.kind === "directory") {
       const entry: Folder = {
+        children: fileSort(await readDirectory(path)),
         id,
         kind: "directory",
         name: file.name,
-        path: file.path,
-        children: fileSort(await readDirectory(`${file.path}/`)),
+        path,
       };
       folders.push(entry);
       saveFileObject(id, entry);
-    } else if (file.kind === "file") {
+    } else {
       const entry: File = {
         id,
-        kind: file.kind,
+        kind: "file",
         name: file.name,
-        path: file.path,
+        path,
       };
       entries.push(entry);
       saveFileObject(id, entry);
@@ -140,7 +94,7 @@ function fileSort(items: (File | Folder)[]): (File | Folder)[] {
   );
   const directories = items.filter((item) => item.kind === "directory");
 
-  const sortedDirectories: (File | Folder)[] = directories.sort((a, b) =>
+  const sortedDirectories = directories.sort((a, b) =>
     a.name.localeCompare(b.name),
   );
   const sortedFiles = files.sort((a, b) => {
@@ -149,9 +103,8 @@ function fileSort(items: (File | Folder)[]): (File | Folder)[] {
 
     if (isDotFileA && !isDotFileB) return -1;
     if (!isDotFileA && isDotFileB) return 1;
-
     return a.name.localeCompare(b.name);
   });
 
-  return sortedDirectories.concat(sortedFiles);
+  return [...sortedDirectories, ...sortedFiles];
 }

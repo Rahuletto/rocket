@@ -1,0 +1,214 @@
+.dock-editor {
+    display: block;
+}
+
+.dock-editor,
+.dock-editor > .dv-dockview {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.dockview-theme-rocket {
+    --dv-active-sash-color: color-mix(in srgb, var(--color) 24%, transparent);
+    --dv-active-sash-transition-delay: 0ms;
+    --dv-active-sash-transition-duration: 120ms;
+    --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+    --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+    --dv-activegroup-visiblepanel-tab-background-color: color-mix(in srgb, var(--color) 7%, transparent);
+    --dv-activegroup-visiblepanel-tab-color: var(--color);
+    --dv-border-radius: 8px;
+    --dv-drag-over-background-color: color-mix(in srgb, var(--color) 8%, transparent);
+    --dv-dropdown-border-radius: 8px;
+    --dv-floating-box-shadow: none;
+    --dv-floating-border: 1px solid var(--hairline);
+    --dv-group-view-background-color: var(--surface);
+    --dv-icon-hover-background-color: color-mix(in srgb, var(--color) 8%, transparent);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--subtle);
+    --dv-inactivegroup-visiblepanel-tab-background-color: color-mix(in srgb, var(--color) 5%, transparent);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--muted);
+    --dv-sash-border-radius: 1px;
+    --dv-sash-color: color-mix(in srgb, var(--color) 8%, transparent);
+    --dv-scrollbar-background-color: color-mix(in srgb, var(--color) 22%, transparent);
+    --dv-separator-border: color-mix(in srgb, var(--color) 9%, transparent);
+    --dv-spacing-padding: 0;
+    --dv-tab-border-radius: 7px;
+    --dv-tab-divider-color: transparent;
+    --dv-tab-font-size: 12px;
+    --dv-tab-margin: 4px 2px;
+    --dv-tabs-and-actions-container-background-color: var(--surface);
+    --dv-tabs-and-actions-container-font-size: 12px;
+    --dv-tabs-and-actions-container-height: 38px;
+    --dv-tabs-container-scrollbar-color: color-mix(in srgb, var(--color) 25%, transparent);
+    background: var(--surface);
+}
+
+.dockview-theme-rocket .dv-grid-view,
+.dockview-theme-rocket .dv-dockview,
+.dockview-theme-rocket .dv-groupview,
+.dockview-theme-rocket .dv-content-container {
+    min-width: 0;
+    min-height: 0;
+}
+
+.dockview-theme-rocket .dv-groupview {
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+.dockview-theme-rocket .dv-tabs-and-actions-container {
+    border-bottom: 1px solid color-mix(in srgb, var(--color) 8%, transparent);
+}
+
+.dockview-theme-rocket .dv-tabs-container {
+    align-items: stretch;
+    padding-inline: 3px;
+}
+
+.dockview-theme-rocket .dv-tab {
+    min-width: 0;
+    border: 0;
+    border-radius: 6px 6px 0 0;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.dockview-theme-rocket .dv-tab.dv-active-tab {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color) 5%, transparent);
+}
+
+.editor-dock-tab {
+    display: grid;
+    width: min(190px, 22vw);
+    min-width: 92px;
+    height: 100%;
+    grid-template-columns: 16px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px 0 12px;
+    color: inherit;
+}
+
+.editor-dock-tab > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.editor-dock-tab button {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--subtle);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.dv-active-tab .editor-dock-tab button,
+.editor-dock-tab:focus-within button,
+.editor-dock-tab:hover button {
+    opacity: 1;
+}
+
+.editor-dock-tab button:hover {
+    background: color-mix(in srgb, var(--color) 9%, transparent);
+    color: var(--color);
+}
+
+.editor-panel-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+}
+
+.editor-panel-body {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.editor-view-toggle {
+    position: absolute;
+    z-index: 12;
+    top: 7px;
+    right: 12px;
+    display: flex;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color) 9%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+    backdrop-filter: blur(14px);
+}
+
+.editor-view-toggle button {
+    display: grid;
+    width: 28px;
+    height: 26px;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--subtle);
+    cursor: pointer;
+}
+
+.editor-view-toggle button.active {
+    background: color-mix(in srgb, var(--color) 8%, transparent);
+    color: var(--color);
+}
+
+.editor-panel-unavailable {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-content: center;
+    gap: 5px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.editor-panel-unavailable strong {
+    color: var(--color);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.editor-panel-unavailable span {
+    font-size: 11px;
+}
+
+.dockview-theme-rocket .dv-drop-target-anchor {
+    border-radius: 7px;
+}
+
+.dockview-theme-rocket .dv-resize-container {
+    border-radius: 8px;
+}
+
+.dockview-theme-rocket .dv-context-menu {
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+    box-shadow: none;
+    backdrop-filter: blur(24px) saturate(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dockview-theme-rocket *,
+    .dockview-theme-rocket *::before,
+    .dockview-theme-rocket *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}

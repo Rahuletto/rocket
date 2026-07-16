@@ -1,0 +1,32 @@
+html[data-theme="light"] {
+    --color: #292a27;
+    --muted: #686a65;
+    --subtle: #91938d;
+    --background: #e8e5df;
+    --background-light: #f4f4f1;
+    --background-lighter: #d7d5cf;
+    --surface: #f4f4f1;
+    --surface-raised: rgba(244, 243, 239, 0.82);
+    --selection: rgba(45, 47, 42, 0.1);
+    --chrome: rgba(193, 184, 174, 0.42);
+    --chrome-strong: rgba(188, 178, 166, 0.48);
+    --hairline: rgba(36, 35, 31, 0.13);
+}
+
+html[data-theme="light"] .navigation-region {
+    background: rgba(179, 168, 157, 0.42);
+}
+
+html[data-theme="light"] .code-tab-items {
+    background: #f4f4f1;
+}
+
+html[data-theme="light"] .code-tab.bg-lighter {
+    background: rgba(40, 41, 37, 0.08);
+}
+
+.monaco-editor,
+.monaco-editor .margin,
+.monaco-editor-background {
+    background-color: var(--surface) !important;
+}

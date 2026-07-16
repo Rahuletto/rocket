@@ -1,0 +1,80 @@
+.tree-context-menu {
+    position: fixed !important;
+    z-index: 99999 !important;
+    width: 228px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
+    border-radius: 9px;
+    padding: 5px;
+    background: color-mix(in srgb, var(--surface-raised) 75%, transparent);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    color: var(--color);
+    backdrop-filter: blur(26px) saturate(1.35);
+    -webkit-backdrop-filter: blur(26px) saturate(1.35);
+}
+
+.tree-context-menu-title,
+.tree-context-menu button {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+}
+
+.tree-context-menu-title {
+    min-height: 28px;
+    padding: 0 8px;
+    color: var(--subtle);
+    font-size: 11px;
+}
+
+.tree-context-menu-title span,
+.tree-context-menu button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-context-menu button {
+    width: 100%;
+    min-height: 30px;
+    border: 0;
+    border-radius: 6px;
+    padding: 0 8px;
+    background: transparent;
+    color: var(--color);
+    cursor: default;
+    text-align: left;
+    font-size: 12px;
+}
+
+.tree-context-menu button:hover,
+.tree-context-menu button:focus-visible {
+    outline: 0;
+    background: color-mix(in srgb, var(--color) 9%, transparent);
+}
+
+.tree-context-menu button.destructive {
+    color: var(--red);
+}
+
+.tree-context-menu button.destructive:hover,
+.tree-context-menu button.destructive:focus-visible {
+    background: color-mix(in srgb, var(--red) 13%, transparent);
+}
+
+.tree-context-menu button:disabled {
+    opacity: 0.5;
+}
+
+.tree-context-menu kbd {
+    color: var(--subtle);
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.tree-context-menu-separator {
+    height: 1px;
+    margin: 4px 5px;
+    background: color-mix(in srgb, var(--color) 9%, transparent);
+}

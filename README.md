@@ -66,6 +66,38 @@ Ready to get started? Here’s how to install Rocket on your Mac:
 2. Open the DMG file and drag Rocket to your Applications folder.
 3. Launch Rocket and get ready to code!
 
+## Agent sidebar
+
+Rocket uses the local Codex CLI as its default agent runtime. Install Codex and
+ensure `codex` is available on `PATH`; Rocket starts
+`codex app-server --stdio` in the open workspace.
+
+The composer supports:
+
+- `/` host commands such as `/help`, `/clear`, `/model`, and `/connect`
+- `@` workspace-file completion
+- `$` agent-tab completion
+- `#` workspace skills from `.agents/skills/*/SKILL.md`
+
+Provider preferences are stored in `~/.rocket/config.json`. Credentials entered
+through `/connect` are stored in `~/.rocket/credentials.json` with user-only
+permissions and are never persisted in renderer storage.
+
+Rocket also detects these environment variables:
+
+```text
+ANTHROPIC_API_KEY
+OPENAI_API_KEY
+OPENROUTER_API_KEY
+CF_ACCOUNT_ID
+CF_API_TOKEN
+OPENAI_COMPATIBLE_API_KEY
+```
+
+Ollama defaults to `http://127.0.0.1:11434/v1`; LM Studio defaults to
+`http://127.0.0.1:1234/v1`. Lava/Flue-backed providers can be configured now,
+but their models remain disabled until the Lava sidecar runtime lands.
+
 <details>
   <summary>“Rocket” cannot be opened because the developer cannot be verified.</summary>
   

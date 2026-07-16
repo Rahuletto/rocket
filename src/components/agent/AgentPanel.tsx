@@ -1,5 +1,6 @@
 import {
   ArrowUp,
+  ChevronDown,
   Crosshair,
   FileDiff,
   LoaderCircle,
@@ -7,28 +8,52 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  applyCompletion,
+  buildCompletions,
+  type CompletionItem,
+} from "../../agent/composer/completion";
+import { listWorkspaceFiles, listWorkspaceSkills } from "../../agent/discover";
+import { findModel } from "../../agent/providers/catalog";
+import { SLASH_COMMANDS } from "../../agent/slash/commands";
 import { useAgent } from "../../provider/AgentContext";
+import { useSource } from "../../provider/SourceContext";
 import AgentMessage from "./AgentMessage";
 import ApprovalPrompt from "./ApprovalPrompt";
+import ComposerAutocomplete from "./ComposerAutocomplete";
+import ModelPicker from "./ModelPicker";
 import ToolActivity from "./ToolActivity";
 
 export default function AgentPanel() {
+  const { projectName } = useSource();
   const {
     activeTabId,
     closeTab,
     createTab,
     followAgent,
     interrupt,
+    modelId,
+    modelPickerOpen,
     respondApproval,
     send,
     setActiveTabId,
     setDraft,
     setFollowAgent,
+    setModelId,
+    setModelPickerOpen,
     state,
     tabs,
   } = useAgent();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const prompt = activeTab?.draft ?? "";
   const tools = Object.values(state.tools);
@@ -40,12 +65,108 @@ export default function AgentPanel() {
     !state.error;
   const canSend = Boolean(prompt.trim()) && state.status !== "running";
 
+  const [files, setFiles] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [selectedCompletion, setSelectedCompletion] = useState(0);
+  const [composerCursor, setComposerCursor] = useState(0);
+  const [completionDismissed, setCompletionDismissed] = useState(false);
+
+  const model = findModel(modelId);
+  const modelLabel = model?.displayName ?? "Codex";
+
+  useEffect(() => {
+    const workspace = projectName || localStorage.getItem("project");
+    if (!workspace) return;
+    let cancelled = false;
+    void Promise.all([
+      listWorkspaceFiles(workspace),
+      listWorkspaceSkills(workspace),
+    ]).then(([nextFiles, nextSkills]) => {
+      if (cancelled) return;
+      setFiles(nextFiles);
+      setSkills(nextSkills);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName]);
+
+  const completionSources = useMemo(
+    () => ({
+      commands: SLASH_COMMANDS.map((command) => ({
+        description: command.description,
+        name: command.name,
+      })),
+      files,
+      sessions: tabs.map((tab) => ({ id: tab.id, name: tab.title })),
+      skills,
+    }),
+    [files, skills, tabs],
+  );
+
+  const completions = useMemo(
+    () =>
+      completionDismissed
+        ? []
+        : buildCompletions(prompt, completionSources, composerCursor),
+    [completionDismissed, completionSources, composerCursor, prompt],
+  );
+
+  useEffect(() => {
+    setSelectedCompletion(0);
+  }, [prompt, composerCursor]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       behavior: "auto",
       top: scrollRef.current.scrollHeight,
     });
   }, [activeTabId, state.messages, state.reasoning, tools.length]);
+
+  const acceptCompletion = (item: CompletionItem) => {
+    const next = applyCompletion(prompt, item, composerCursor);
+    setDraft(next.text);
+    setComposerCursor(next.cursor);
+    setCompletionDismissed(true);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.cursor, next.cursor);
+    });
+  };
+
+  const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (completions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedCompletion((index) => (index + 1) % completions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedCompletion(
+          (index) => (index - 1 + completions.length) % completions.length,
+        );
+        return;
+      }
+      if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) {
+        event.preventDefault();
+        acceptCompletion(completions[selectedCompletion] ?? completions[0]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCompletionDismissed(true);
+        return;
+      }
+    }
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -154,21 +275,69 @@ export default function AgentPanel() {
       </div>
 
       <form className="agent-composer" onSubmit={submit}>
-        <textarea
-          aria-label="Message agent"
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
+        <div className="agent-composer-body">
+          {completions.length > 0 && (
+            <ComposerAutocomplete
+              items={completions}
+              onHover={setSelectedCompletion}
+              onSelect={acceptCompletion}
+              selectedIndex={selectedCompletion}
+            />
+          )}
+          {modelPickerOpen && (
+            <ModelPicker
+              modelId={modelId}
+              onClose={() => setModelPickerOpen(false)}
+              onSelect={(next) => {
+                setModelId(next.id);
+                setModelPickerOpen(false);
+              }}
+            />
+          )}
+          <textarea
+            aria-label="Message agent"
+            aria-autocomplete="list"
+            aria-controls={
+              completions.length > 0 ? "agent-composer-completions" : undefined
             }
-          }}
-          placeholder="Ask Agent"
-          rows={1}
-          value={prompt}
-        />
+            aria-expanded={completions.length > 0}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setComposerCursor(event.target.selectionStart);
+              setCompletionDismissed(false);
+            }}
+            onClick={(event) => {
+              setComposerCursor(event.currentTarget.selectionStart);
+              setCompletionDismissed(false);
+            }}
+            onKeyUp={(event) => {
+              if (
+                !["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"].includes(
+                  event.key,
+                )
+              ) {
+                setComposerCursor(event.currentTarget.selectionStart);
+              }
+            }}
+            onKeyDown={onComposerKeyDown}
+            placeholder="Ask Agent · / commands · @ files · $ sessions · # skills"
+            ref={textareaRef}
+            rows={1}
+            value={prompt}
+          />
+        </div>
         <div className="agent-composer-footer">
-          <div className="agent-composer-meta" />
+          <div className="agent-composer-meta">
+            <button
+              className="agent-mode-chip"
+              onClick={() => setModelPickerOpen((open) => !open)}
+              title="Select model / connect providers"
+              type="button"
+            >
+              {modelLabel}
+              <ChevronDown size={12} />
+            </button>
+          </div>
           <div className="agent-composer-actions">
             <button
               aria-label={

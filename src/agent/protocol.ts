@@ -46,6 +46,7 @@ export type AgentEvent =
   | { type: "session_ready"; runtime: AgentRuntimeKind; sessionId: string }
   | { type: "turn_started"; turnId: string }
   | { type: "user_message"; messageId: string; text: string }
+  | { type: "host_message"; messageId: string; text: string }
   | { type: "message_delta"; messageId: string; text: string }
   | { type: "reasoning_delta"; text: string }
   | { type: "tool_started"; tool: AgentTool }

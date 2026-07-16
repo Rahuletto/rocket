@@ -390,11 +390,239 @@
 }
 
 .agent-composer {
+    position: relative;
     margin: 0 12px 12px;
     border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
     border-radius: 12px;
     background: var(--background-light);
     box-shadow: 0 1px 0 color-mix(in srgb, var(--color) 4%, transparent);
+}
+
+.agent-composer-body {
+    position: relative;
+}
+
+.agent-autocomplete,
+.agent-popover {
+    position: absolute;
+    right: 0;
+    left: 0;
+    z-index: 20;
+    overflow: auto;
+    border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
+    border-radius: 10px;
+    background: var(--background-light, var(--surface, #1a1b1f));
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+
+.agent-autocomplete {
+    bottom: calc(100% + 6px);
+    max-height: 220px;
+}
+
+.agent-autocomplete-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    border: 0;
+    padding: 7px 10px;
+    background: transparent;
+    color: var(--color);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.agent-autocomplete-item.active,
+.agent-autocomplete-item:hover {
+    background: color-mix(in srgb, var(--color) 8%, transparent);
+}
+
+.agent-autocomplete-label {
+    min-width: 0;
+    overflow: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-autocomplete-desc {
+    flex-shrink: 0;
+    color: #8d93a8;
+    font-size: 11px;
+}
+
+.agent-model-picker {
+    bottom: calc(100% + 6px);
+    max-height: 340px;
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px 6px;
+    font-size: 12px;
+}
+
+.agent-popover-header button {
+    border: 0;
+    background: transparent;
+    color: #8d93a8;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.agent-popover-hint {
+    margin: 0;
+    padding: 0 12px 8px;
+    color: #8d93a8;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.agent-popover-error {
+    margin: 0;
+    padding: 0 12px 8px;
+    color: var(--red);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.agent-popover-search,
+.agent-field input {
+    width: calc(100% - 24px);
+    margin: 0 12px 8px;
+    border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
+    border-radius: 8px;
+    padding: 7px 9px;
+    background: transparent;
+    color: var(--color);
+    font: inherit;
+    font-size: 12px;
+}
+
+.agent-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 12px 8px;
+    font-size: 11px;
+    color: #8d93a8;
+}
+
+.agent-field input {
+    width: 100%;
+    margin: 0;
+}
+
+.agent-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 0 12px 10px;
+}
+
+.agent-popover-actions button {
+    min-height: 28px;
+    border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
+    border-radius: 7px;
+    padding: 0 10px;
+    background: transparent;
+    color: var(--color);
+    cursor: pointer;
+}
+
+.agent-popover-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.agent-model-list {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding: 0 4px 6px;
+}
+
+.agent-model-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: transparent;
+    color: var(--color);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.agent-model-row:hover:not(:disabled),
+.agent-model-row.active {
+    background: color-mix(in srgb, var(--color) 8%, transparent);
+}
+
+.agent-model-row.unavailable:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.agent-model-meta {
+    color: #8d93a8;
+    font-size: 10px;
+}
+
+.agent-provider-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-top: 1px solid color-mix(in srgb, var(--color) 8%, transparent);
+    padding: 8px 10px 10px;
+}
+
+.agent-provider-chip {
+    border: 1px solid color-mix(in srgb, var(--color) 12%, transparent);
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: transparent;
+    color: #aeb3c5;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.agent-provider-chip:hover {
+    color: var(--color);
+    border-color: color-mix(in srgb, #ff6b35 45%, transparent);
+}
+
+.agent-mode-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 8px;
+    background: color-mix(in srgb, var(--color) 7%, transparent);
+    color: #aeb3c5;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.agent-mode-chip:hover {
+    color: var(--color);
 }
 
 .agent-composer:focus-within {

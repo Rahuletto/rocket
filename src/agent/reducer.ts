@@ -78,6 +78,19 @@ export function agentSessionReducer(
           },
         ],
       };
+    case "host_message":
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: event.messageId,
+            role: "assistant",
+            status: "complete",
+            text: event.text,
+          },
+        ],
+      };
     case "message_delta":
       return {
         ...state,

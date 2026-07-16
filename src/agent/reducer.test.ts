@@ -107,4 +107,22 @@ describe("agentSessionReducer", () => {
     expect(completed.status).toBe("idle");
     expect(completed.messages[0]?.status).toBe("complete");
   });
+
+  it("adds host command output without changing connection state", () => {
+    const state = agentSessionReducer(initialAgentSessionState, {
+      type: "host_message",
+      messageId: "host-1",
+      text: "/help output",
+    });
+
+    expect(state.status).toBe("disconnected");
+    expect(state.messages).toEqual([
+      {
+        id: "host-1",
+        role: "assistant",
+        status: "complete",
+        text: "/help output",
+      },
+    ]);
+  });
 });

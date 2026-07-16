@@ -1,53 +1,24 @@
-import { BiLogoTypescript } from "react-icons/bi";
-import { RiJavascriptFill } from "react-icons/ri";
-import {
-  FaCss3,
-  FaImage,
-  FaMarkdown,
-  FaReact,
-  FaSquareFontAwesome,
-  FaHtml5,
-  FaCircleInfo,
-  FaRust,
-  FaFile,
-  FaGitAlt,
-} from "react-icons/fa6";
-import { HiGif } from "react-icons/hi2";
-import { ImSvg } from "react-icons/im";
-import { IoLogoNodejs } from "react-icons/io5";
+import { createFileTreeIconResolver } from "@pierre/trees";
 import type { IconProps } from "../types/Icon";
 
-const icons: { [key: string]: JSX.Element } = {
-  tsx: <FaReact color="#3178C6" />,
-  jsx: <FaReact color="#61DAFB" />,
-  css: <FaCss3 color="#1572B6" />,
-  svg: <ImSvg color="#ffbb33" />,
-  png: <FaImage color="#31c47d" />,
-  icns: <FaSquareFontAwesome color="#346ed9" />,
-  ico: <FaSquareFontAwesome color="#346ed9" />,
-  gif: <HiGif color="#858585" />,
-  jpeg: <FaImage color="#31c47d" />,
-  jpg: <FaImage color="#31c47d" />,
-  tiff: <FaImage color="#31c47d" />,
-  bmp: <FaImage color="#31c47d" />,
-  ts: <BiLogoTypescript color="#3178C6" />,
-  js: <RiJavascriptFill color="#F0DB4F" />,
-  json: <IoLogoNodejs color="#5fa04e" />,
-  md: <FaMarkdown color="#ed8f4c" />,
-  lock: <FaCircleInfo color="#69a6f0" />,
-  gitignore: <FaGitAlt color="#F34F29" />,
-  html: <FaHtml5 color="#E44D26" />,
-  rs: <FaRust color="#FFA83D" />,
-};
+// Create the icon resolver using @pierre/trees's own resolver
+const resolver = createFileTreeIconResolver({
+  set: "complete",
+  colored: true,
+});
 
-export default function FileIcon({ name, size = "base" }: IconProps) {
-  const dot = name.lastIndexOf(".");
-  const fileType = dot !== -1 ? name.slice(dot + 1).toLowerCase() : "NONE";
-  const cls = size === "base" ? "w-4" : "w-3";
+export default function FileIcon({ name }: IconProps) {
+  const cls = "w-4 h-4 flex items-center justify-center flex-shrink-0 file-icon-colored";
 
-  if (icons[fileType]) {
-    return <span className={cls}>{icons[fileType]}</span>;
-  }
+  // Use the built-in resolver from @pierre/trees to get the token
+  const resolved = resolver.resolveIcon("file-tree-icon-file", name);
+  const token = resolved.token || "default";
 
-  return <FaFile />;
+  return (
+    <span className={cls} data-token={token} style={{ display: "inline-flex", flexShrink: 0 }}>
+      <svg viewBox="0 0 16 16" style={{ width: "100%", height: "100%", fill: "currentColor" }}>
+        <use href={`#file-tree-builtin-${token}`} />
+      </svg>
+    </span>
+  );
 }

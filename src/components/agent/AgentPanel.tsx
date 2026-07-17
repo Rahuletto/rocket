@@ -24,6 +24,7 @@ import {
 import { listWorkspaceFiles, listWorkspaceSkills } from "../../agent/discover";
 import { findModel } from "../../agent/providers/catalog";
 import { SLASH_COMMANDS } from "../../agent/slash/commands";
+import { deriveTabStatus } from "../../agent/protocol";
 import { useAgent } from "../../provider/AgentContext";
 import { useSource } from "../../provider/SourceContext";
 import AgentMessage from "./AgentMessage";
@@ -195,11 +196,15 @@ export default function AgentPanel() {
         <div className="agent-tab-bar" role="tablist" aria-label="Agent chats">
           {tabs.map((tab) => {
             const selected = tab.id === activeTabId;
-            const running = tab.state.status === "running";
+            const status = deriveTabStatus(tab.state);
+            const running = status === "running";
+            const waiting = status === "waiting";
+            const error = status === "error";
+            const queueCount = tab.queue.length;
             return (
               <div
                 key={tab.id}
-                className={`agent-tab ${selected ? "active" : ""}`}
+                className={`agent-tab ${selected ? "active" : ""} agent-tab-${status}`}
                 role="presentation"
               >
                 <button
@@ -213,7 +218,18 @@ export default function AgentPanel() {
                   {running && (
                     <LoaderCircle className="agent-spinner" size={11} />
                   )}
+                  {waiting && (
+                    <span className="agent-tab-dot agent-tab-dot-waiting" />
+                  )}
+                  {error && (
+                    <span className="agent-tab-dot agent-tab-dot-error" />
+                  )}
                   <span className="agent-tab-title">{tab.title}</span>
+                  {queueCount > 0 && (
+                    <span className="agent-tab-queue" title={`${queueCount} queued`}>
+                      {queueCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   aria-label={`Close ${tab.title}`}

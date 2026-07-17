@@ -3,6 +3,7 @@ mod protocol;
 pub(crate) mod storage;
 
 use codex::CodexProcess;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -10,7 +11,7 @@ use tauri::AppHandle;
 
 #[derive(Default)]
 pub struct AgentManager {
-    process: Mutex<Option<CodexProcess>>,
+    sessions: Mutex<HashMap<String, CodexProcess>>,
 }
 
 const SKIP_DIRS: &[&str] = &[
@@ -143,40 +144,67 @@ pub fn agent_start_session(
     manager: tauri::State<AgentManager>,
     workspace: String,
     model: Option<String>,
+    session_id: String,
 ) -> Result<String, String> {
-    let process = CodexProcess::start(app, &workspace, model.as_deref())?;
+    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    // Replace any existing session for this tab.
+    if let Some(old) = sessions.remove(&session_id) {
+        drop(old);
+    }
+    let process = CodexProcess::start(app, &workspace, model.as_deref(), &session_id)?;
     let thread_id = process.thread_id().to_string();
-    *manager.process.lock().map_err(|_| "Agent state poisoned")? = Some(process);
+    sessions.insert(session_id, process);
     Ok(thread_id)
 }
 
 #[tauri::command]
-pub fn agent_send(manager: tauri::State<AgentManager>, prompt: String) -> Result<String, String> {
-    let process = manager.process.lock().map_err(|_| "Agent state poisoned")?;
-    process
-        .as_ref()
-        .ok_or_else(|| "No active agent session".to_string())?
+pub fn agent_send(
+    manager: tauri::State<AgentManager>,
+    session_id: String,
+    prompt: String,
+) -> Result<String, String> {
+    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| format!("No agent session for {session_id}"))?
         .send(&prompt)
 }
 
 #[tauri::command]
-pub fn agent_interrupt(manager: tauri::State<AgentManager>, turn_id: String) -> Result<(), String> {
-    let process = manager.process.lock().map_err(|_| "Agent state poisoned")?;
-    process
-        .as_ref()
-        .ok_or_else(|| "No active agent session".to_string())?
+pub fn agent_interrupt(
+    manager: tauri::State<AgentManager>,
+    session_id: String,
+    turn_id: String,
+) -> Result<(), String> {
+    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| format!("No agent session for {session_id}"))?
         .interrupt(&turn_id)
 }
 
 #[tauri::command]
 pub fn agent_respond_approval(
     manager: tauri::State<AgentManager>,
+    session_id: String,
     request_id: String,
     decision: String,
 ) -> Result<(), String> {
-    let process = manager.process.lock().map_err(|_| "Agent state poisoned")?;
-    process
-        .as_ref()
-        .ok_or_else(|| "No active agent session".to_string())?
+    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| format!("No agent session for {session_id}"))?
         .respond_approval(&request_id, &decision)
+}
+
+#[tauri::command]
+pub fn agent_end_session(
+    manager: tauri::State<AgentManager>,
+    session_id: String,
+) -> Result<(), String> {
+    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    if let Some(process) = sessions.remove(&session_id) {
+        drop(process); // kills the child via Drop
+    }
+    Ok(())
 }

@@ -12,7 +12,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { AgentEvent, AgentSessionState } from "../agent/protocol";
+import type {
+  AgentEvent,
+  AgentSessionState,
+  RoutedAgentEvent,
+  TabDisplayStatus,
+} from "../agent/protocol";
+import { deriveTabStatus } from "../agent/protocol";
 import {
   agentSessionReducer,
   initialAgentSessionState,
@@ -38,6 +44,7 @@ type ApprovalDecision = "accept" | "acceptForSession" | "decline";
 export interface AgentTab {
   draft: string;
   id: string;
+  queue: string[];
   state: AgentSessionState;
   title: string;
 }
@@ -54,6 +61,8 @@ interface AgentContextValue {
   interrupt: () => Promise<void>;
   modelId: string;
   modelPickerOpen: boolean;
+  /** Queued messages waiting to be sent when the agent becomes idle. */
+  queuedMessages: string[];
   respondApproval: (id: string, decision: ApprovalDecision) => Promise<void>;
   /** Returns true if the draft was handled as a slash command. */
   runSlashCommand: (raw: string) => boolean;
@@ -64,6 +73,8 @@ interface AgentContextValue {
   setModelId: (modelId: string) => void;
   setModelPickerOpen: Dispatch<SetStateAction<boolean>>;
   state: AgentSessionState;
+  /** Derived display status for the active tab. */
+  tabStatus: TabDisplayStatus;
   tabs: AgentTab[];
 }
 
@@ -73,6 +84,7 @@ function createAgentTab(index: number): AgentTab {
   return {
     draft: "",
     id: crypto.randomUUID(),
+    queue: [],
     state: {
       ...initialAgentSessionState,
       approvals: [],
@@ -110,7 +122,6 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     useState<AgentUserConfig>(DEFAULT_AGENT_CONFIG);
   const [modelId, setModelIdState] = useState(DEFAULT_AGENT_CONFIG.defaultModelId);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const liveOwnerRef = useRef<string | null>(null);
   const activeTabIdRef = useRef(activeTabId);
   const tabsRef = useRef(tabs);
   const modelIdRef = useRef(modelId);
@@ -176,15 +187,107 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     [dispatchToTab],
   );
 
+  const createTab = useCallback(() => {
+    tabCounterRef.current += 1;
+    const tab = createAgentTab(tabCounterRef.current);
+    setTabs((current) => [...current, tab]);
+    setActiveTabId(tab.id);
+  }, []);
+
+  const closeTab = useCallback((id: string) => {
+    void invoke("agent_end_session", { sessionId: id }).catch(() => {});
+    setTabs((current) => {
+      if (current.length <= 1) {
+        tabCounterRef.current += 1;
+        const replacement = createAgentTab(tabCounterRef.current);
+        setActiveTabId(replacement.id);
+        return [replacement];
+      }
+
+      const index = current.findIndex((tab) => tab.id === id);
+      const next = current.filter((tab) => tab.id !== id);
+      if (activeTabIdRef.current === id) {
+        const neighbor = next[Math.max(0, index - 1)] ?? next[0];
+        setActiveTabId(neighbor.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const flushQueue = useCallback(
+    async (tabId: string) => {
+      const tab = tabsRef.current.find((entry) => entry.id === tabId);
+      if (!tab || tab.queue.length === 0) return;
+      // Only flush when the agent is idle.
+      if (tab.state.status !== "idle") return;
+
+      const [next, ...rest] = tab.queue;
+      setTabs((current) =>
+        mapTab(current, tabId, (entry) => ({ ...entry, queue: rest })),
+      );
+      dispatchToTab(tabId, {
+        type: "user_message",
+        messageId: crypto.randomUUID(),
+        text: next,
+      });
+      try {
+        await invoke("agent_send", { sessionId: tabId, prompt: next });
+      } catch (error) {
+        dispatchToTab(tabId, { type: "error", message: String(error) });
+      }
+    },
+    [dispatchToTab],
+  );
+
   useEffect(() => {
     const unlisten = listen<AgentEvent>("agent-event", (event) => {
-      const owner = liveOwnerRef.current ?? activeTabIdRef.current;
-      dispatchToTab(owner, event.payload);
+      const routed = event.payload as RoutedAgentEvent;
+      dispatchToTab(routed.sessionId, routed);
+      // Auto-flush queued messages when a turn completes (Maestro pattern).
+      if (routed.type === "turn_completed") {
+        void flushQueue(routed.sessionId);
+      }
     });
     return () => {
       disposeListener(unlisten);
     };
-  }, [dispatchToTab]);
+  }, [dispatchToTab, flushQueue]);
+
+  // Keyboard shortcuts: Cmd+N (new tab), Cmd+W (close tab), Cmd+[ / Cmd+] (switch tabs).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key === "n" && !event.shiftKey) {
+        event.preventDefault();
+        createTab();
+      } else if (event.key === "w" && !event.shiftKey) {
+        event.preventDefault();
+        closeTab(activeTabIdRef.current);
+      } else if (event.key === "]") {
+        event.preventDefault();
+        const tabs = tabsRef.current;
+        const index = tabs.findIndex(
+          (tab) => tab.id === activeTabIdRef.current,
+        );
+        if (tabs.length > 1) {
+          setActiveTabId(tabs[(index + 1) % tabs.length].id);
+        }
+      } else if (event.key === "[") {
+        event.preventDefault();
+        const tabs = tabsRef.current;
+        const index = tabs.findIndex(
+          (tab) => tab.id === activeTabIdRef.current,
+        );
+        if (tabs.length > 1) {
+          setActiveTabId(
+            tabs[(index - 1 + tabs.length) % tabs.length].id,
+          );
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [closeTab, createTab]);
 
   const setModelId = useCallback((next: string) => {
     const selected = findModel(next);
@@ -205,7 +308,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       return updated;
     });
     // Force reconnect on next send with new model.
-    liveOwnerRef.current = null;
+    // End the current Codex session so the next send starts fresh.
+    void invoke("agent_end_session", { sessionId: activeTabIdRef.current }).catch(
+      () => {},
+    );
     setTabs((current) =>
       current.map((tab) =>
         tab.id === activeTabIdRef.current
@@ -247,38 +353,16 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
     dispatchToTab(tabId, { type: "session_connecting", runtime: "codex" });
     try {
-      const sessionId = await invoke<string>("agent_start_session", {
+      await invoke("agent_start_session", {
+        sessionId: tabId,
         model: codexModelArg(modelIdRef.current),
         workspace,
       });
-      liveOwnerRef.current = tabId;
-      setTabs((current) =>
-        current.map((tab) => {
-          if (tab.id === tabId) {
-            return {
-              ...tab,
-              state: agentSessionReducer(tab.state, {
-                type: "session_ready",
-                runtime: "codex",
-                sessionId,
-              }),
-            };
-          }
-          if (tab.state.sessionId && tab.state.status !== "disconnected") {
-            return {
-              ...tab,
-              state: {
-                ...tab.state,
-                sessionId: undefined,
-                status:
-                  tab.state.status === "running" ? "idle" : tab.state.status,
-                turnId: undefined,
-              },
-            };
-          }
-          return tab;
-        }),
-      );
+      dispatchToTab(tabId, {
+        type: "session_ready",
+        runtime: "codex",
+        sessionId: tabId,
+      });
       return true;
     } catch (error) {
       dispatchToTab(tabId, { type: "error", message: String(error) });
@@ -288,10 +372,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const clearActiveTab = useCallback(() => {
     const tabId = activeTabIdRef.current;
+    void invoke("agent_end_session", { sessionId: tabId }).catch(() => {});
     setTabs((current) =>
       mapTab(current, tabId, (tab) => ({
         ...tab,
         draft: "",
+        queue: [],
         state: {
           ...initialAgentSessionState,
           approvals: [],
@@ -302,9 +388,6 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         title: "New chat",
       })),
     );
-    if (liveOwnerRef.current === tabId) {
-      liveOwnerRef.current = null;
-    }
   }, []);
 
   const runSlashCommand = useCallback(
@@ -422,10 +505,29 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
       const tabId = activeTabIdRef.current;
       const tab = tabsRef.current.find((entry) => entry.id === tabId);
-      const ownsProcess =
-        liveOwnerRef.current === tabId && Boolean(tab?.state.sessionId);
+      const hasSession = Boolean(tab?.state.sessionId);
+      const isBusy =
+        tab?.state.status === "running" ||
+        (tab?.state.approvals.length ?? 0) > 0;
 
-      if (!ownsProcess) {
+      // Queue the message if the agent is busy — Maestro-style message queueing.
+      if (isBusy) {
+        dispatchToTab(tabId, {
+          type: "host_message",
+          messageId: `queued-${crypto.randomUUID()}`,
+          text: `_Queued: ${text}_`,
+        });
+        setTabs((current) =>
+          mapTab(current, tabId, (entry) => ({
+            ...entry,
+            draft: "",
+            queue: [...entry.queue, text],
+          })),
+        );
+        return;
+      }
+
+      if (!hasSession) {
         const connected = await connect();
         if (!connected) return;
       }
@@ -440,7 +542,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       );
 
       try {
-        await invoke("agent_send", { prompt: text });
+        await invoke("agent_send", { sessionId: tabId, prompt: text });
       } catch (error) {
         dispatchToTab(tabId, { type: "error", message: String(error) });
       }
@@ -451,9 +553,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const interrupt = useCallback(async () => {
     const tabId = activeTabIdRef.current;
     const tab = tabsRef.current.find((entry) => entry.id === tabId);
-    if (!tab?.state.turnId || liveOwnerRef.current !== tabId) return;
+    if (!tab?.state.turnId || !tab.state.sessionId) return;
     try {
-      await invoke("agent_interrupt", { turnId: tab.state.turnId });
+      await invoke("agent_interrupt", {
+        sessionId: tabId,
+        turnId: tab.state.turnId,
+      });
     } catch (error) {
       dispatchToTab(tabId, { type: "error", message: String(error) });
     }
@@ -464,6 +569,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       const tabId = activeTabIdRef.current;
       try {
         await invoke("agent_respond_approval", {
+          sessionId: tabId,
           decision,
           requestId: id,
         });
@@ -474,38 +580,6 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     },
     [dispatchToTab],
   );
-
-  const createTab = useCallback(() => {
-    tabCounterRef.current += 1;
-    const tab = createAgentTab(tabCounterRef.current);
-    setTabs((current) => [...current, tab]);
-    setActiveTabId(tab.id);
-  }, []);
-
-  const closeTab = useCallback((id: string) => {
-    setTabs((current) => {
-      if (current.length <= 1) {
-        tabCounterRef.current += 1;
-        const replacement = createAgentTab(tabCounterRef.current);
-        setActiveTabId(replacement.id);
-        if (liveOwnerRef.current === id) {
-          liveOwnerRef.current = null;
-        }
-        return [replacement];
-      }
-
-      const index = current.findIndex((tab) => tab.id === id);
-      const next = current.filter((tab) => tab.id !== id);
-      if (activeTabIdRef.current === id) {
-        const neighbor = next[Math.max(0, index - 1)] ?? next[0];
-        setActiveTabId(neighbor.id);
-      }
-      if (liveOwnerRef.current === id) {
-        liveOwnerRef.current = null;
-      }
-      return next;
-    });
-  }, []);
 
   const setDraft = useCallback((draft: string) => {
     const tabId = activeTabIdRef.current;
@@ -527,6 +601,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       interrupt,
       modelId,
       modelPickerOpen,
+      queuedMessages: activeTab?.queue ?? [],
       respondApproval,
       runSlashCommand,
       send,
@@ -536,6 +611,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       setModelId,
       setModelPickerOpen,
       state,
+      tabStatus: deriveTabStatus(state),
       tabs,
     }),
     [

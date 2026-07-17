@@ -24,7 +24,12 @@ pub struct CodexProcess {
 }
 
 impl CodexProcess {
-    pub fn start(app: AppHandle, workspace: &str, model: Option<&str>) -> Result<Self, String> {
+    pub fn start(
+        app: AppHandle,
+        workspace: &str,
+        model: Option<&str>,
+        session_id: &str,
+    ) -> Result<Self, String> {
         let mut child = Command::new("codex")
             .args(["app-server", "--stdio"])
             .current_dir(workspace)
@@ -43,6 +48,7 @@ impl CodexProcess {
 
         let reader_pending = Arc::clone(&pending);
         let reader_app = app.clone();
+        let reader_session_id = session_id.to_string();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 let Ok(line) = line else { break };
@@ -63,15 +69,13 @@ impl CodexProcess {
                     continue;
                 }
                 for event in normalize_codex_message(&value) {
-                    let _ = reader_app.emit("agent-event", event);
+                    let _ = reader_app.emit("agent-event", tag_event(&event, &reader_session_id));
                 }
             }
-            let _ = reader_app.emit(
-                "agent-event",
-                AgentEvent::Error {
-                    message: "Codex app-server stopped".to_string(),
-                },
-            );
+            let stopped = AgentEvent::Error {
+                message: "Codex app-server stopped".to_string(),
+            };
+            let _ = reader_app.emit("agent-event", tag_event(&stopped, &reader_session_id));
         });
 
         let stderr_app = app;
@@ -178,4 +182,13 @@ impl Drop for CodexProcess {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+/// Inject the session id into an event so the frontend can route by tab.
+fn tag_event(event: &AgentEvent, session_id: &str) -> Value {
+    let mut json = serde_json::to_value(event).unwrap_or_else(|_| Value::Null);
+    if let Some(obj) = json.as_object_mut() {
+        obj.insert("sessionId".to_string(), Value::String(session_id.to_string()));
+    }
+    json
 }

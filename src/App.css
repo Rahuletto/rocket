@@ -102,6 +102,40 @@
     white-space: nowrap;
 }
 
+/* Per-tab status indicators (derived status — Agent Orchestrator pattern) */
+.agent-tab-dot {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.agent-tab-dot-waiting {
+    background: #f5a623;
+    box-shadow: 0 0 4px rgba(245, 166, 35, 0.5);
+}
+
+.agent-tab-dot-error {
+    background: #ff4d4f;
+    box-shadow: 0 0 4px rgba(255, 77, 79, 0.4);
+}
+
+.agent-tab-queue {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+}
+
 .agent-tab-close {
     display: inline-flex;
     align-items: center;

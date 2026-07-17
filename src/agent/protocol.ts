@@ -63,6 +63,13 @@ export type AgentEvent =
   | { type: "turn_completed"; turnId: string }
   | { type: "error"; message: string };
 
+/**
+ * Event as it arrives over the Tauri wire — tagged with `sessionId` so the
+ * frontend can route each event to the correct agent tab. The reducer accepts
+ * the bare `AgentEvent` (a supertype) and ignores `sessionId`.
+ */
+export type RoutedAgentEvent = AgentEvent & { sessionId: string };
+
 export interface AgentSessionState {
   approvals: AgentApproval[];
   changedFiles: AgentFileChange[];
@@ -75,4 +82,27 @@ export interface AgentSessionState {
   status: AgentSessionStatus;
   tools: Record<string, AgentTool>;
   turnId?: string;
+}
+
+/**
+ * Derived display status for a tab — computed from the durable session
+ * facts (status, approvals, turnId) at read time, never stored separately.
+ * Inspired by Agent Orchestrator's "durable facts, derived status" pattern.
+ */
+export type TabDisplayStatus =
+  | "disconnected"
+  | "connecting"
+  | "idle"
+  | "running"
+  | "waiting"
+  | "error";
+
+export function deriveTabStatus(state: AgentSessionState): TabDisplayStatus {
+  if (state.status === "error") return "error";
+  if (state.status === "disconnected") return "disconnected";
+  if (state.status === "connecting") return "connecting";
+  // Waiting for approval takes priority over running — the agent is blocked.
+  if (state.approvals.length > 0) return "waiting";
+  if (state.status === "running") return "running";
+  return "idle";
 }

@@ -167,6 +167,7 @@ fn main() {
             agent::agent_send,
             agent::agent_interrupt,
             agent::agent_respond_approval,
+            agent::agent_end_session,
             agent::agent_list_files,
             agent::agent_list_skills,
             agent::storage::agent_load_config,

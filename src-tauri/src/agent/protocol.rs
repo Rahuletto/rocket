@@ -6,7 +6,6 @@ use serde_json::{json, Value};
 pub enum AgentEvent {
     SessionReady {
         runtime: &'static str,
-        session_id: String,
     },
     TurnStarted {
         turn_id: String,
@@ -200,10 +199,9 @@ pub fn normalize_codex_message(value: &Value) -> Vec<AgentEvent> {
         "thread/started" => params
             .pointer("/thread/id")
             .and_then(Value::as_str)
-            .map(|id| {
+            .map(|_| {
                 vec![AgentEvent::SessionReady {
                     runtime: "codex",
-                    session_id: id.to_string(),
                 }]
             })
             .unwrap_or_default(),

@@ -132,14 +132,18 @@ function TerminalSession({
         invoke("terminal_write", { data, terminalId: id }).catch(() => {});
       });
 
+      let resizeTimer: number | undefined;
       const resizeObserver = new ResizeObserver(() => {
         if (!mount.offsetParent) return;
-        fit.fit();
-        invoke("terminal_resize", {
-          cols: terminal.cols,
-          rows: terminal.rows,
-          terminalId: id,
-        }).catch(() => {});
+        if (resizeTimer) window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          fit.fit();
+          invoke("terminal_resize", {
+            cols: terminal.cols,
+            rows: terminal.rows,
+            terminalId: id,
+          }).catch(() => {});
+        }, 16);
       });
       resizeObserver.observe(mount);
 
@@ -157,6 +161,7 @@ function TerminalSession({
         terminal.dispose();
         terminalRef.current = null;
         fitRef.current = null;
+        if (resizeTimer) window.clearTimeout(resizeTimer);
       };
     } else {
       // Sandboxed terminal using just-bash from Vercel
@@ -515,7 +520,7 @@ export default function TerminalPanel() {
                   minWidth: 0,
                   minHeight: 0,
                   position: "relative",
-                  border: activePaneId === pane.id ? "1px solid var(--accent)" : "1px solid transparent",
+                  border: "none",
                   borderRadius: "6px",
                   overflow: "hidden",
                 }}
@@ -560,7 +565,7 @@ export default function TerminalPanel() {
               setContextMenu(null);
             }}
           >
-            Local Terminal (zsh)
+            New Terminal
           </button>
           <button
             onClick={() => {
@@ -568,7 +573,7 @@ export default function TerminalPanel() {
               setContextMenu(null);
             }}
           >
-            Sandboxed Terminal (just-bash)
+            Sandboxed Terminal
           </button>
         </div>
       )}

@@ -4,7 +4,12 @@ import { getFileObject } from "../stores/file";
 import { readFile, writeFile } from "../helpers/filesys";
 import { Languages } from "../types/Languages";
 import { IoWarning } from "react-icons/io5";
+import { ChevronDown } from "lucide-react";
+import { findModel } from "../agent/providers/catalog";
+import ModelPicker from "../components/agent/ModelPicker";
+import ComposerInput from "../components/agent/ComposerInput";
 import { useAgent } from "../provider/AgentContext";
+import { useWorkbench } from "../provider/WorkbenchContext";
 
 interface Props {
   id: string;
@@ -15,7 +20,16 @@ interface Props {
 export default function CodeEditor({ id, active, language }: Props) {
   const visible = active ? "" : "hidden";
 
-  const { send } = useAgent();
+  const {
+    send,
+    modelId,
+    setModelId,
+    modelPickerOpen,
+    setModelPickerOpen,
+  } = useAgent();
+  const { setAgentOpen } = useWorkbench();
+  const model = findModel(modelId);
+  const modelLabel = model?.displayName ?? "Codex";
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState("dark");
@@ -92,6 +106,7 @@ export default function CodeEditor({ id, active, language }: Props) {
     if (!text) return;
     
     setChatVisible(false);
+    setAgentOpen(true);
     
     const lines = (code || "").split("\n");
     const targetLine = chatPosition.lineNumber;
@@ -350,26 +365,42 @@ User Request: ${text}`;
             >
               <div className="inline-chat-box">
                 <div className="inline-chat-header">
-                  <span>Ask AI about line {chatPosition.lineNumber}</span>
+                  <span>Line {chatPosition.lineNumber}</span>
+                  <button
+                    aria-label="Select model"
+                    className="inline-chat-model"
+                    onClick={() => setModelPickerOpen((open) => !open)}
+                    type="button"
+                  >
+                    {modelLabel}
+                    <ChevronDown size={12} />
+                  </button>
                 </div>
-                <input
-                  type="text"
+                {modelPickerOpen && (
+                  <ModelPicker
+                    modelId={modelId}
+                    onClose={() => setModelPickerOpen(false)}
+                    onSelect={(next) => {
+                      setModelId(next.id);
+                      setModelPickerOpen(false);
+                    }}
+                  />
+                )}
+                <ComposerInput
                   className="inline-chat-input"
-                  placeholder="Type a message..."
+                  placeholder="What's on your mind"
                   autoFocus
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
                       handleSendChat();
                     } else if (e.key === "Escape") {
                       setChatVisible(false);
                     }
                   }}
                 />
-                <div className="inline-chat-footer">
-                  <span>ESC to cancel, Enter to send</span>
-                </div>
               </div>
             </div>
           )}

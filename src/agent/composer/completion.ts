@@ -27,23 +27,25 @@ export function detectCompletionQuery(
 ): CompletionQuery | null {
   const before = text.slice(0, cursor);
 
+  // Leading `/` (start or after any whitespace) is a slash-command trigger,
+  // not a filesystem path completer.
   const slashIdx = before.lastIndexOf("/");
   if (slashIdx !== -1) {
     const afterSlash = before.slice(slashIdx + 1);
-    if (
-      (slashIdx === 0 || before[slashIdx - 1] === " " || before[slashIdx - 1] === "\n") &&
-      !afterSlash.includes(" ")
-    ) {
+    const boundaryOk =
+      slashIdx === 0 || /\s/.test(before[slashIdx - 1] ?? "");
+    if (boundaryOk && !/\s/.test(afterSlash)) {
       return { baseIndex: slashIdx, kind: "slash", query: afterSlash };
     }
   }
 
+  // `(?:\$\{|\$)` consumes `{` when present; capture is only the id tail.
   const sessionMatch = /(?:\$\{|\$)([^\s}]*)$/.exec(before);
   if (sessionMatch) {
     return {
       baseIndex: before.lastIndexOf("$"),
       kind: "session",
-      query: (sessionMatch[1] ?? "").replace(/^{/, ""),
+      query: sessionMatch[1] ?? "",
     };
   }
 

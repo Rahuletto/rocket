@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { CompletionItem } from "../../agent/composer/completion";
 
 export default function ComposerAutocomplete({
@@ -11,10 +12,32 @@ export default function ComposerAutocomplete({
   onSelect: (item: CompletionItem) => void;
   onHover: (index: number) => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = listRef.current;
+    if (!root || items.length === 0) return;
+    const active = root.querySelector<HTMLElement>(
+      `[data-completion-index="${selectedIndex}"]`,
+    );
+    if (!active) return;
+    // Scroll only within the listbox — avoid scrollIntoView scrolling ancestors.
+    const itemTop = active.offsetTop;
+    const itemBottom = itemTop + active.offsetHeight;
+    const viewTop = root.scrollTop;
+    const viewBottom = viewTop + root.clientHeight;
+    if (itemTop < viewTop) {
+      root.scrollTop = itemTop;
+    } else if (itemBottom > viewBottom) {
+      root.scrollTop = itemBottom - root.clientHeight;
+    }
+  }, [items.length, selectedIndex]);
+
   if (items.length === 0) return null;
 
   return (
     <div
+      ref={listRef}
       className="agent-autocomplete"
       id="agent-composer-completions"
       role="listbox"
@@ -24,6 +47,7 @@ export default function ComposerAutocomplete({
         <button
           key={`${item.kind}-${item.label}-${index}`}
           aria-selected={index === selectedIndex}
+          data-completion-index={index}
           id={`agent-completion-${index}`}
           className={`agent-autocomplete-item ${
             index === selectedIndex ? "active" : ""

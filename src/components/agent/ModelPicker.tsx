@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
+  ChevronLeft,
+  KeyRound,
+  Search,
+  X,
+} from "lucide-react";
+import {
   PROVIDER_CATALOG,
   type ModelInfo,
   type ProviderId,
@@ -113,12 +120,27 @@ export default function ModelPicker({
         role="dialog"
       >
         <header className="agent-popover-header">
+          <button
+            aria-label="Back"
+            className="agent-popover-back"
+            onClick={() => setConnectProvider(null)}
+            type="button"
+          >
+            <ChevronLeft size={16} />
+          </button>
           <strong>Connect {provider?.name ?? connectProvider}</strong>
-          <button onClick={() => setConnectProvider(null)} type="button">
-            Back
+          <button
+            aria-label="Close"
+            className="agent-popover-close"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={15} />
           </button>
         </header>
-        <p className="agent-popover-hint">{provider?.description}</p>
+        {provider?.description && (
+          <p className="agent-popover-hint">{provider.description}</p>
+        )}
         {provider?.authMethod === "binary" && (
           <p className="agent-popover-hint">
             {isConnected("codex")
@@ -137,7 +159,7 @@ export default function ModelPicker({
                   [field.key]: event.target.value,
                 }))
               }
-              placeholder={field.key}
+              placeholder={field.label}
               type={field.secret ? "password" : "text"}
               value={credentials[field.key] ?? ""}
             />
@@ -168,7 +190,7 @@ export default function ModelPicker({
               onClick={() => void saveConnection()}
               type="button"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : "Connect"}
             </button>
           )}
         </div>
@@ -186,29 +208,36 @@ export default function ModelPicker({
     >
       <header className="agent-popover-header">
         <strong>Models</strong>
-        <button onClick={onClose} type="button">
-          Close
+        <button
+          aria-label="Close"
+          className="agent-popover-close"
+          onClick={onClose}
+          type="button"
+        >
+          <X size={15} />
         </button>
       </header>
-      <input
-        aria-label="Search models"
-        autoFocus
-        className="agent-popover-search"
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search models…"
-        value={query}
-      />
+      <div className="agent-popover-search-wrap">
+        <Search size={13} />
+        <input
+          aria-label="Search models"
+          autoFocus
+          className="agent-popover-search"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search models…"
+          value={query}
+        />
+      </div>
       {error && <p className="agent-popover-error">{error}</p>}
       <div className="agent-model-list">
         {models.map((model) => {
           const connected = isConnected(model.providerId);
           const runtimeAvailable = model.engine === "codex";
+          const isActive = model.id === modelId;
           return (
             <button
               key={model.id}
-              className={`agent-model-row ${
-                model.id === modelId ? "active" : ""
-              } ${runtimeAvailable ? "" : "unavailable"}`}
+              className={`agent-model-row ${isActive ? "active" : ""}`}
               disabled={connected && !runtimeAvailable}
               onClick={() => {
                 if (!connected) {
@@ -220,31 +249,26 @@ export default function ModelPicker({
               title={
                 runtimeAvailable
                   ? `Use ${model.displayName}`
-                  : "Lava runtime ships in a later milestone"
+                  : "This model isn't available yet"
               }
               type="button"
             >
-              <span className="agent-model-name">{model.displayName}</span>
-              <span className="agent-model-meta">
-                {model.engine === "codex" ? "Codex" : "Lava · coming later"}
-                {!connected ? " · connect" : ""}
+              <span className="agent-model-row-main">
+                <span className="agent-model-name">{model.displayName}</span>
+                <span className="agent-model-provider">
+                  {PROVIDER_CATALOG.find((p) => p.id === model.providerId)
+                    ?.name ?? model.providerId}
+                </span>
+              </span>
+              <span className="agent-model-row-trail">
+                {!connected && (
+                  <span className="agent-model-connect">Connect</span>
+                )}
+                {isActive && <Check size={14} className="agent-model-check" />}
               </span>
             </button>
           );
         })}
-      </div>
-      <div className="agent-provider-row" aria-label="Providers">
-        {PROVIDER_CATALOG.map((provider) => (
-          <button
-            key={provider.id}
-            className="agent-provider-chip"
-            onClick={() => openConnection(provider.id)}
-            type="button"
-          >
-            {provider.name}
-            {isConnected(provider.id) ? " ✓" : ""}
-          </button>
-        ))}
       </div>
     </div>
   );

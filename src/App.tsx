@@ -26,6 +26,21 @@ export default function App() {
   const [navigatorWidth, setNavigatorWidth] = useState(240);
   const [agentWidth, setAgentWidth] = useState(300);
   const [terminalHeight, setTerminalHeight] = useState(240);
+  const [terminalResizing, setTerminalResizing] = useState(false);
+  const [navResizing, setNavResizing] = useState(false);
+  const [agentResizing, setAgentResizing] = useState(false);
+
+  // Keep the terminal mounted slightly after close so the collapse animation
+  // can play without unmounting xterm mid-flight (which is expensive).
+  const [terminalMounted, setTerminalMounted] = useState(terminalOpen);
+  useEffect(() => {
+    if (terminalOpen) {
+      setTerminalMounted(true);
+      return;
+    }
+    const t = window.setTimeout(() => setTerminalMounted(false), 240);
+    return () => window.clearTimeout(t);
+  }, [terminalOpen]);
 
   useEffect(() => {
     if (followAgent && state.latestTouchedFile) {
@@ -38,14 +53,24 @@ export default function App() {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = navigatorWidth;
+    setNavResizing(true);
+    let frame = 0;
+    let latest = startWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX;
-      const newWidth = layoutSwapped ? startWidth - deltaX : startWidth + deltaX;
-      setNavigatorWidth(Math.max(180, Math.min(450, newWidth)));
+      latest = Math.max(180, Math.min(450, layoutSwapped ? startWidth - deltaX : startWidth + deltaX));
+      if (!frame) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          setNavigatorWidth(latest);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (frame) cancelAnimationFrame(frame);
+      setNavResizing(false);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -58,14 +83,24 @@ export default function App() {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = agentWidth;
+    setAgentResizing(true);
+    let frame = 0;
+    let latest = startWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX;
-      const newWidth = layoutSwapped ? startWidth + deltaX : startWidth - deltaX;
-      setAgentWidth(Math.max(220, Math.min(500, newWidth)));
+      latest = Math.max(220, Math.min(500, layoutSwapped ? startWidth + deltaX : startWidth - deltaX));
+      if (!frame) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          setAgentWidth(latest);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      if (frame) cancelAnimationFrame(frame);
+      setAgentResizing(false);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -78,13 +113,23 @@ export default function App() {
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = terminalHeight;
+    setTerminalResizing(true);
+    let frame = 0;
+    let latest = startHeight;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaY = moveEvent.clientY - startY;
-      setTerminalHeight(Math.max(120, Math.min(500, startHeight - deltaY)));
+      latest = Math.max(120, Math.min(500, startHeight - deltaY));
+      if (!frame) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          setTerminalHeight(latest);
+        });
+      }
     };
 
     const handleMouseUp = () => {
+      setTerminalResizing(false);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -100,7 +145,7 @@ export default function App() {
       initial={{ width: 0, opacity: 0 }}
       animate={{ width: navigatorWidth, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+      transition={navResizing ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 30 }}
       style={{ display: "flex", flexDirection: "row", height: "100%", overflow: "hidden" }}
     >
       {layoutSwapped && (
@@ -131,7 +176,7 @@ export default function App() {
       initial={{ width: 0, opacity: 0 }}
       animate={{ width: agentWidth, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+      transition={agentResizing ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 30 }}
       style={{ display: "flex", flexDirection: "row", height: "100%", overflow: "hidden" }}
     >
       {!layoutSwapped && (
@@ -173,12 +218,12 @@ export default function App() {
               </div>
               <motion.div
                 id="terminal-panel"
-                initial={{ height: 0, opacity: 0 }}
+                initial={false}
                 animate={{
                   height: terminalOpen ? terminalHeight + 9 : 0,
                   opacity: terminalOpen ? 1 : 0,
                 }}
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                transition={terminalResizing ? { duration: 0 } : { duration: 0.22, ease: "easeOut" }}
                 style={{
                   display: "flex",
                   flexDirection: "column",
@@ -194,10 +239,11 @@ export default function App() {
                     height: 9,
                     position: "relative",
                     width: "100%",
+                    flex: "0 0 auto",
                   }}
                 />
-                <div className="terminal-island" style={{ height: terminalHeight }}>
-                  <TerminalPanel />
+                <div className="terminal-island" style={{ flex: 1, minHeight: 0 }}>
+                  {terminalMounted && <TerminalPanel />}
                 </div>
               </motion.div>
             </div>

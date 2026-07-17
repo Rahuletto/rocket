@@ -102,7 +102,6 @@ export default function Titlebar() {
         </button>
       </div>
       <div className="titlebar-project" data-tauri-drag-region>
-        <img alt="" src="/rocket-transparent.svg" />
         <span>{projectName}</span>
       </div>
       <div className="titlebar-actions">

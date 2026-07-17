@@ -29,6 +29,7 @@ import { useSource } from "../../provider/SourceContext";
 import AgentMessage from "./AgentMessage";
 import ApprovalPrompt from "./ApprovalPrompt";
 import ComposerAutocomplete from "./ComposerAutocomplete";
+import ComposerInput from "./ComposerInput";
 import ModelPicker from "./ModelPicker";
 import ToolActivity from "./ToolActivity";
 
@@ -56,6 +57,7 @@ export default function AgentPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const prompt = activeTab?.draft ?? "";
+
   const tools = Object.values(state.tools);
   const isEmpty =
     state.messages.length === 0 &&
@@ -112,6 +114,12 @@ export default function AgentPanel() {
     [completionDismissed, completionSources, composerCursor, prompt],
   );
 
+  // Clamp during render so Enter/Tab never accept a stale out-of-range index.
+  const safeSelectedCompletion =
+    completions.length === 0
+      ? 0
+      : Math.min(selectedCompletion, completions.length - 1);
+
   useEffect(() => {
     setSelectedCompletion(0);
   }, [prompt, composerCursor]);
@@ -140,19 +148,24 @@ export default function AgentPanel() {
     if (completions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setSelectedCompletion((index) => (index + 1) % completions.length);
+        setSelectedCompletion(
+          (index) => (Math.min(index, completions.length - 1) + 1) % completions.length,
+        );
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setSelectedCompletion(
-          (index) => (index - 1 + completions.length) % completions.length,
-        );
+        setSelectedCompletion((index) => {
+          const current = Math.min(index, completions.length - 1);
+          return (current - 1 + completions.length) % completions.length;
+        });
         return;
       }
       if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) {
         event.preventDefault();
-        acceptCompletion(completions[selectedCompletion] ?? completions[0]);
+        acceptCompletion(
+          completions[safeSelectedCompletion] ?? completions[0],
+        );
         return;
       }
       if (event.key === "Escape") {
@@ -281,7 +294,7 @@ export default function AgentPanel() {
               items={completions}
               onHover={setSelectedCompletion}
               onSelect={acceptCompletion}
-              selectedIndex={selectedCompletion}
+              selectedIndex={safeSelectedCompletion}
             />
           )}
           {modelPickerOpen && (
@@ -294,7 +307,7 @@ export default function AgentPanel() {
               }}
             />
           )}
-          <textarea
+          <ComposerInput
             aria-label="Message agent"
             aria-autocomplete="list"
             aria-controls={
@@ -322,7 +335,6 @@ export default function AgentPanel() {
             onKeyDown={onComposerKeyDown}
             placeholder="Ask Agent · / commands · @ files · $ sessions · # skills"
             ref={textareaRef}
-            rows={1}
             value={prompt}
           />
         </div>

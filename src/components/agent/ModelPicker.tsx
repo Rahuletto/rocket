@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
-  KeyRound,
+  Plug,
   Search,
+  Sparkles,
   X,
 } from "lucide-react";
 import {
   PROVIDER_CATALOG,
   type ModelInfo,
+  type ProviderDef,
   type ProviderId,
   allModels,
 } from "../../agent/providers/catalog";
@@ -39,6 +41,7 @@ export default function ModelPicker({
   const [statuses, setStatuses] = useState<ProviderStatus[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [focusedIndex, setFocusedIndex] = useState(0);
 
   const refreshStatuses = async () => {
     try {
@@ -60,21 +63,43 @@ export default function ModelPicker({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const models = useMemo(() => {
-    const q = query.toLowerCase();
+  const statusOf = (providerId: ProviderId) =>
+    statuses.find((status) => status.providerId === providerId);
+
+  const isConnected = (providerId: ProviderId) =>
+    Boolean(statusOf(providerId)?.connected);
+
+  const filteredModels = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return allModels();
     return allModels().filter(
       (model) =>
-        !q ||
         model.id.toLowerCase().includes(q) ||
         model.displayName.toLowerCase().includes(q) ||
         model.providerId.includes(q),
     );
   }, [query]);
 
-  const isConnected = (providerId: ProviderId) =>
-    statuses.some(
-      (status) => status.providerId === providerId && status.connected,
-    );
+  // Providers that still have at least one matching model — preserves catalog order.
+  const visibleProviders = useMemo(() => {
+    const ids = new Set(filteredModels.map((model) => model.providerId));
+    return PROVIDER_CATALOG.filter((provider) => ids.has(provider.id));
+  }, [filteredModels]);
+
+  // Flat list of visible models, in render order, for keyboard navigation.
+  const flatModels = useMemo(
+    () =>
+      visibleProviders.flatMap((provider) =>
+        provider.models.filter((model) =>
+          filteredModels.some((filtered) => filtered.id === model.id),
+        ),
+      ),
+    [filteredModels, visibleProviders],
+  );
+
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [query]);
 
   const openConnection = (providerId: ProviderId) => {
     const provider = PROVIDER_CATALOG.find((entry) => entry.id === providerId);
@@ -99,6 +124,31 @@ export default function ModelPicker({
     }
   };
 
+  const activateModel = (model: ModelInfo) => {
+    if (!isConnected(model.providerId)) {
+      openConnection(model.providerId);
+      return;
+    }
+    onSelect(model);
+  };
+
+  const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (flatModels.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setFocusedIndex((index) => (index + 1) % flatModels.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setFocusedIndex((index) =>
+        index - 1 < 0 ? flatModels.length - 1 : index - 1,
+      );
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const target = flatModels[focusedIndex] ?? flatModels[0];
+      if (target) activateModel(target);
+    }
+  };
+
   if (connectProvider) {
     const provider = PROVIDER_CATALOG.find(
       (entry) => entry.id === connectProvider,
@@ -108,8 +158,7 @@ export default function ModelPicker({
       provider?.authMethod === "api_key" &&
       connectProvider !== "openai-compatible";
     const credentialsComplete =
-      !requiresCredentials ||
-      fields.every((field) => credentials[field.key]?.trim());
+      !requiresCredentials || fields.every((field) => credentials[field.key]?.trim());
 
     return (
       <div
@@ -142,10 +191,10 @@ export default function ModelPicker({
           <p className="agent-popover-hint">{provider.description}</p>
         )}
         {provider?.authMethod === "binary" && (
-          <p className="agent-popover-hint">
+          <p className={`agent-popover-hint ${isConnected("codex") ? "" : "agent-popover-warn"}`}>
             {isConnected("codex")
               ? "Codex CLI found on PATH."
-              : "Codex CLI not found on PATH."}
+              : "Codex CLI not found on PATH — install it to use Codex models."}
           </p>
         )}
         {fields.map((field) => (
@@ -153,6 +202,7 @@ export default function ModelPicker({
             <span>{field.label}</span>
             <input
               autoComplete="off"
+              autoFocus
               onChange={(event) =>
                 setCredentials((current) => ({
                   ...current,
@@ -170,7 +220,7 @@ export default function ModelPicker({
           <label className="agent-field">
             <span>Base URL</span>
             <input
-              autoFocus
+              autoFocus={fields.length === 0}
               onChange={(event) => setBaseUrl(event.target.value)}
               placeholder={provider?.defaultBaseUrl}
               type="url"
@@ -185,7 +235,7 @@ export default function ModelPicker({
           </button>
           {provider?.authMethod !== "binary" && (
             <button
-              className="agent-button-primary"
+              className="agent-popover-connect"
               disabled={saving || !credentialsComplete}
               onClick={() => void saveConnection()}
               type="button"
@@ -197,6 +247,8 @@ export default function ModelPicker({
       </div>
     );
   }
+
+  let runningIndex = -1;
 
   return (
     <div
@@ -224,52 +276,90 @@ export default function ModelPicker({
           autoFocus
           className="agent-popover-search"
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onSearchKeyDown}
           placeholder="Search models…"
           value={query}
         />
       </div>
       {error && <p className="agent-popover-error">{error}</p>}
       <div className="agent-model-list">
-        {models.map((model) => {
-          const connected = isConnected(model.providerId);
-          const runtimeAvailable = model.engine === "codex";
-          const isActive = model.id === modelId;
-          return (
-            <button
-              key={model.id}
-              className={`agent-model-row ${isActive ? "active" : ""}`}
-              disabled={connected && !runtimeAvailable}
-              onClick={() => {
-                if (!connected) {
-                  openConnection(model.providerId);
-                  return;
-                }
-                onSelect(model);
-              }}
-              title={
-                runtimeAvailable
-                  ? `Use ${model.displayName}`
-                  : "This model isn't available yet"
-              }
-              type="button"
-            >
-              <span className="agent-model-row-main">
-                <span className="agent-model-name">{model.displayName}</span>
-                <span className="agent-model-provider">
-                  {PROVIDER_CATALOG.find((p) => p.id === model.providerId)
-                    ?.name ?? model.providerId}
-                </span>
-              </span>
-              <span className="agent-model-row-trail">
-                {!connected && (
-                  <span className="agent-model-connect">Connect</span>
-                )}
-                {isActive && <Check size={14} className="agent-model-check" />}
-              </span>
-            </button>
-          );
-        })}
+        {visibleProviders.length === 0 ? (
+          <p className="agent-model-empty">No models match “{query}”.</p>
+        ) : (
+          visibleProviders.map((provider: ProviderDef) => {
+            const connected = isConnected(provider.id);
+            const models = provider.models.filter((model) =>
+              filteredModels.some((filtered) => filtered.id === model.id),
+            );
+            return (
+              <section className="agent-model-group" key={provider.id}>
+                <div className="agent-model-group-head">
+                  <span
+                    aria-hidden="true"
+                    className={`agent-model-status ${connected ? "connected" : "disconnected"}`}
+                    title={connected ? "Connected" : "Not connected"}
+                  />
+                  <span className="agent-model-group-name">{provider.name}</span>
+                  {!connected && provider.authMethod !== "binary" && (
+                    <button
+                      className="agent-model-group-connect"
+                      onClick={() => openConnection(provider.id)}
+                      type="button"
+                    >
+                      <Plug size={11} />
+                      Connect
+                    </button>
+                  )}
+                </div>
+                {models.map((model) => {
+                  runningIndex += 1;
+                  const flatIndex = runningIndex;
+                  const runtimeAvailable = model.engine === "codex";
+                  const isActive = model.id === modelId;
+                  const selectable = connected && runtimeAvailable;
+                  const focused = flatIndex === focusedIndex;
+                  return (
+                    <button
+                      key={model.id}
+                      className={`agent-model-row ${isActive ? "active" : ""} ${
+                        focused ? "focused" : ""
+                      } ${selectable ? "" : "unavailable"}`}
+                      disabled={!selectable}
+                      onClick={() => activateModel(model)}
+                      onMouseEnter={() => setFocusedIndex(flatIndex)}
+                      title={
+                        !connected
+                          ? `Connect to ${provider.name} to use this model`
+                          : runtimeAvailable
+                            ? `Use ${model.displayName}`
+                            : "This model isn't available yet"
+                      }
+                      type="button"
+                    >
+                      <span className="agent-model-row-main">
+                        <span className="agent-model-name">{model.displayName}</span>
+                        {!runtimeAvailable && (
+                          <span className="agent-model-soon">Soon</span>
+                        )}
+                      </span>
+                      <span className="agent-model-row-trail">
+                        {!connected && (
+                          <span className="agent-model-connect">Connect</span>
+                        )}
+                        {isActive && <Check size={14} className="agent-model-check" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </section>
+            );
+          })
+        )}
       </div>
+      <footer className="agent-model-footer">
+        <Sparkles size={11} />
+        <span>↑↓ to navigate · ↵ to select · esc to close</span>
+      </footer>
     </div>
   );
 }

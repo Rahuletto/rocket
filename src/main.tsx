@@ -8,6 +8,7 @@ import { AgentProvider } from "./provider/AgentContext";
 import { GitProvider } from "./provider/GitContext";
 import { WorkbenchProvider } from "./provider/WorkbenchContext";
 import { ReviewProvider } from "./provider/ReviewContext";
+import { LspProvider } from "./provider/LspContext";
 import "streamdown/styles.css";
 import "dockview-react/dist/styles/dockview.css";
 import "./styles/editor.css";
@@ -22,13 +23,15 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         <AgentProvider>
           <ReviewProvider>
             <SourceProvider>
-              <React.StrictMode>
-                <App />
-              </React.StrictMode>
+              <LspProvider>
+                <React.StrictMode>
+                  <App />
+                </React.StrictMode>
+              </LspProvider>
             </SourceProvider>
           </ReviewProvider>
         </AgentProvider>
       </GitProvider>
     </WorkbenchProvider>
-  </SideProvider>
+  </SideProvider>,
 );

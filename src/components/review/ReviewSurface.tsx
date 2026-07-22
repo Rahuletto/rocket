@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { X } from "lucide-react";
 import { useReview } from "../../provider/ReviewContext";
+import { useSource } from "../../provider/SourceContext";
 
 const PatchDiff = lazy(() =>
   import("@pierre/diffs/react").then((module) => ({
@@ -9,7 +10,8 @@ const PatchDiff = lazy(() =>
 );
 
 export default function ReviewSurface() {
-  const { closeReview, review } = useReview();
+  const { closeReview, review, updateFiles } = useReview();
+  const { openFileByPath } = useSource();
   if (!review) return null;
 
   return (
@@ -29,12 +31,22 @@ export default function ReviewSurface() {
         </button>
       </header>
       <div className="review-content">
+        {review.source === "agent" && review.onKeep && (
+          <div className="review-actions">
+            <button onClick={() => void review.onKeep?.().then(closeReview)} type="button">Mark Owned Changes Reviewed</button>
+          </div>
+        )}
         <Suspense fallback={<div className="review-loading">Rendering diff</div>}>
           {review.files.map((file) => (
-            <PatchDiff
+            <article className="review-file" key={file.path}>
+              <div className="review-file-header">
+                <button onClick={() => openFileByPath(file.path)} type="button">{file.path}</button>
+                <span>{file.kind} +{file.additions ?? 0} −{file.deletions ?? 0}{file.conflict ? " · changed externally" : ""}</span>
+                {review.onKeep && <button onClick={() => void review.onKeep?.(file.path).then(async () => updateFiles(await review.onRefresh?.() ?? []))} type="button">Mark Reviewed</button>}
+              </div>
+              <PatchDiff
               className="review-diff"
               disableWorkerPool
-              key={file.path}
               options={{
                 diffIndicators: "bars",
                 diffStyle: "unified",
@@ -48,7 +60,8 @@ export default function ReviewSurface() {
                 themeType: "system",
               }}
               patch={file.patch}
-            />
+              />
+            </article>
           ))}
         </Suspense>
       </div>

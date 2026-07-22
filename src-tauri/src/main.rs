@@ -10,7 +10,9 @@ use tauri::{
 mod agent;
 mod fs;
 mod git;
+mod lsp;
 mod menu;
+mod search;
 mod terminal;
 
 #[derive(Default)]
@@ -122,6 +124,8 @@ fn main() {
         .manage(WorkspaceState::default())
         .manage(WatcherState::default())
         .manage(terminal::TerminalManager::default())
+        .manage(lsp::LspManager::default())
+        .manage(search::SearchManager::default())
         .menu(menu::menu_bar)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "terminal" => {
@@ -170,10 +174,19 @@ fn main() {
             agent::agent_end_session,
             agent::agent_list_files,
             agent::agent_list_skills,
+            agent::profiles::agent_profiles,
+            agent::profiles::agent_probe_profile,
             agent::storage::agent_load_config,
             agent::storage::agent_save_config,
             agent::storage::agent_save_provider_connection,
             agent::storage::agent_provider_statuses,
+            lsp::lsp_start,
+            lsp::lsp_restart,
+            lsp::lsp_stop,
+            lsp::lsp_request,
+            lsp::lsp_document_event,
+            search::search_workspace,
+            search::cancel_workspace_search,
             git::git_snapshot,
             git::git_stage,
             git::git_unstage,

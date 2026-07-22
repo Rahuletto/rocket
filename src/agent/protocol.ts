@@ -41,6 +41,15 @@ export interface AgentApproval {
   kind: "command" | "file" | "permissions" | "tool";
 }
 
+export interface AgentBackendEvent {
+  event: string;
+  payload: unknown;
+}
+
+export interface AgentBackendCapabilities {
+  [key: string]: unknown;
+}
+
 export type AgentEvent =
   | { type: "session_connecting"; runtime: AgentRuntimeKind }
   | { type: "session_ready"; runtime: AgentRuntimeKind; sessionId: string }
@@ -61,6 +70,7 @@ export type AgentEvent =
   | { type: "approval_requested"; approval: AgentApproval }
   | { type: "approval_resolved"; approvalId: string }
   | { type: "turn_completed"; turnId: string }
+  | { type: "backend_event"; event: string; payload: unknown }
   | { type: "error"; message: string };
 
 /**
@@ -70,14 +80,29 @@ export type AgentEvent =
  */
 export type RoutedAgentEvent = AgentEvent & { sessionId: string };
 
+export function buildAgentSendPayload(
+  sessionId: string,
+  prompt: string,
+  referenceText: string,
+): { prompt: string; referenceText: string; sessionId: string } {
+  return { prompt, referenceText, sessionId };
+}
+
 export interface AgentSessionState {
   approvals: AgentApproval[];
+  /** Bounded diagnostic history of backend-specific ACP events. */
+  backendEvents: AgentBackendEvent[];
+  backendCapabilities?: AgentBackendCapabilities;
+  backendConfig?: unknown;
   changedFiles: AgentFileChange[];
   error?: string;
   latestTouchedFile?: string;
   messages: AgentMessage[];
   reasoning: string;
   runtime?: AgentRuntimeKind;
+  /** A restored transcript is offline until a new runtime is explicitly connected. */
+  runtimeConnection: "offline" | "connected";
+  runtimeContext?: "new" | "restored";
   sessionId?: string;
   status: AgentSessionStatus;
   tools: Record<string, AgentTool>;
@@ -105,4 +130,18 @@ export function deriveTabStatus(state: AgentSessionState): TabDisplayStatus {
   if (state.approvals.length > 0) return "waiting";
   if (state.status === "running") return "running";
   return "idle";
+}
+
+export function titleFromPrompt(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return "New chat";
+  const withoutPrefix = compact
+    .replace(/^(please|can you|could you|would you)\s+/i, "")
+    .replace(/[.!?]+$/, "");
+  const title = withoutPrefix || compact;
+  return title.length > 36 ? `${title.slice(0, 36).trimEnd()}…` : title;
+}
+
+export function isUntitledTab(title: string): boolean {
+  return title === "New chat" || title === "Agent session" || /^Chat \d+$/.test(title);
 }

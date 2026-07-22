@@ -18,13 +18,22 @@ import type {
   RoutedAgentEvent,
   TabDisplayStatus,
 } from "../agent/protocol";
-import { deriveTabStatus } from "../agent/protocol";
+import {
+  buildAgentSendPayload,
+  deriveTabStatus,
+  isUntitledTab,
+  titleFromPrompt,
+} from "../agent/protocol";
 import {
   agentSessionReducer,
   initialAgentSessionState,
 } from "../agent/reducer";
 import { disposeListener } from "../helpers/events";
-import { codexModelArg, findModel } from "../agent/providers/catalog";
+import {
+  codexModelArg,
+  findModel,
+  isModelSelectionChange,
+} from "../agent/providers/catalog";
 import {
   DEFAULT_AGENT_CONFIG,
   loadAgentConfig,
@@ -32,27 +41,58 @@ import {
   type AgentUserConfig,
 } from "../agent/providers/config";
 import {
-  findSlashCommand,
   HELP_TEXT,
-  parseSlashInput,
-  SUBAGENTS_HELP,
   TOOLS_HELP,
+  validateSlashInput,
 } from "../agent/slash/commands";
+import {
+  DEFAULT_AGENT_PROFILES,
+  isRunnableProfile,
+  loadProfiles,
+  type AgentProfile,
+} from "../agent/profiles";
+import {
+  buildAgentPrompt,
+  flushEditorContext,
+  getEditorContext,
+  type AgentPromptAttachments,
+} from "../agent/editorContext";
+import {
+  DEFAULT_AGENT_WORKSPACE_MODE,
+  type AgentWorkspaceMode,
+  type WorktreeStatus,
+} from "../components/agent/worktree";
 
 type ApprovalDecision = "accept" | "acceptForSession" | "decline";
 
 export interface AgentTab {
+  baseRevision: string;
   draft: string;
   id: string;
+  profileId: string;
   queue: string[];
   state: AgentSessionState;
   title: string;
+  workspaceMode: AgentWorkspaceMode;
+}
+
+interface StoredTab {
+  backend: string;
+  id: string;
+  opaqueSessionId?: string;
+  profileId?: string;
+  queue: string[];
+  state: AgentSessionState;
+  title: string;
+  updatedAt: number;
+  workspace: string;
+  worktree?: WorktreeStatus;
 }
 
 interface AgentContextValue {
   activeTabId: string;
   clearActiveTab: () => void;
-  closeTab: (id: string) => void;
+  closeTab: (id: string) => Promise<void>;
   config: AgentUserConfig;
   connect: () => Promise<boolean>;
   createTab: () => void;
@@ -61,6 +101,9 @@ interface AgentContextValue {
   interrupt: () => Promise<void>;
   modelId: string;
   modelPickerOpen: boolean;
+  profileId: string;
+  profiles: AgentProfile[];
+  updateProfiles: (profiles: AgentProfile[]) => void;
   /** Queued messages waiting to be sent when the agent becomes idle. */
   queuedMessages: string[];
   respondApproval: (id: string, decision: ApprovalDecision) => Promise<void>;
@@ -71,7 +114,10 @@ interface AgentContextValue {
   setDraft: (draft: string) => void;
   setFollowAgent: (enabled: boolean) => void;
   setModelId: (modelId: string) => void;
+  setProfileId: (profileId: string) => void;
   setModelPickerOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceMode: (mode: AgentWorkspaceMode) => void;
+  setBaseRevision: (revision: string) => void;
   state: AgentSessionState;
   /** Derived display status for the active tab. */
   tabStatus: TabDisplayStatus;
@@ -82,8 +128,10 @@ const AgentContext = createContext<AgentContextValue | null>(null);
 
 function createAgentTab(index: number): AgentTab {
   return {
+    baseRevision: "HEAD",
     draft: "",
     id: crypto.randomUUID(),
+    profileId: "codex-native",
     queue: [],
     state: {
       ...initialAgentSessionState,
@@ -93,13 +141,8 @@ function createAgentTab(index: number): AgentTab {
       tools: {},
     },
     title: `Chat ${index}`,
+    workspaceMode: DEFAULT_AGENT_WORKSPACE_MODE,
   };
-}
-
-function titleFromPrompt(text: string): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (!compact) return "New chat";
-  return compact.length > 28 ? `${compact.slice(0, 28)}…` : compact;
 }
 
 function mapTab(
@@ -108,6 +151,24 @@ function mapTab(
   update: (tab: AgentTab) => AgentTab,
 ): AgentTab[] {
   return tabs.map((tab) => (tab.id === id ? update(tab) : tab));
+}
+
+function threadAttachmentsFor(
+  prompt: string,
+  tabs: AgentTab[],
+): AgentPromptAttachments {
+  return {
+    threads: tabs
+      .filter(
+        (tab) =>
+          prompt.includes(`$${tab.id}`) || prompt.includes(`\${${tab.id}}`),
+      )
+      .map((tab) => ({
+        id: tab.id,
+        messages: tab.state.messages.map(({ role, text }) => ({ role, text })),
+        title: tab.title,
+      })),
+  };
 }
 
 export function AgentProvider({ children }: { children: ReactNode }) {
@@ -122,6 +183,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     useState<AgentUserConfig>(DEFAULT_AGENT_CONFIG);
   const [modelId, setModelIdState] = useState(DEFAULT_AGENT_CONFIG.defaultModelId);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [profiles, setProfiles] = useState<AgentProfile[]>(DEFAULT_AGENT_PROFILES);
+  const [profileId, setProfileIdState] = useState("codex-native");
+  const profileIdRef = useRef(profileId);
   const activeTabIdRef = useRef(activeTabId);
   const tabsRef = useRef(tabs);
   const modelIdRef = useRef(modelId);
@@ -130,6 +194,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   activeTabIdRef.current = activeTabId;
   tabsRef.current = tabs;
   modelIdRef.current = modelId;
+  profileIdRef.current = profileId;
 
   const activeTab =
     tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? seedTabRef.current;
@@ -142,7 +207,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         const nextTitle =
           event.type === "user_message" &&
           tab.state.messages.length === 0 &&
-          tab.title.startsWith("Chat ")
+          isUntitledTab(tab.title)
             ? titleFromPrompt(event.text)
             : tab.title;
         return {
@@ -156,11 +221,42 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    void invoke<StoredTab[]>("agent_load_sessions")
+      .then((stored) => {
+        if (cancelled || stored.length === 0) return;
+        const restored = stored.map((tab) => ({
+          baseRevision: tab.worktree?.baseRevision ?? "HEAD",
+          draft: "",
+          id: tab.id,
+          profileId: tab.profileId ?? "codex-native",
+          queue: tab.queue ?? [],
+          state: {
+            ...initialAgentSessionState,
+            ...tab.state,
+            approvals: [],
+            runtimeConnection: "offline" as const,
+            runtimeContext: "restored" as const,
+            status: "disconnected" as const,
+            turnId: undefined,
+          },
+          title: tab.title,
+          workspaceMode: tab.worktree
+            ? "isolated-worktree" as const
+            : DEFAULT_AGENT_WORKSPACE_MODE,
+        }));
+        setTabs(restored);
+        setActiveTabId(restored[restored.length - 1].id);
+        tabCounterRef.current = restored.length;
+      })
+      .catch(() => {
+        // SQLite is best effort; retain the existing in-memory tab.
+      });
     void loadAgentConfig()
       .then((stored) => {
         if (cancelled) return;
         setConfig(stored);
         setModelIdState(stored.defaultModelId);
+        setProfileIdState(stored.selectedProfileId);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -170,10 +266,41 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           });
         }
       });
+    void loadProfiles()
+      .then((loaded) => {
+        const runnable = loaded.filter(isRunnableProfile);
+        setProfiles(runnable.length > 0 ? runnable : DEFAULT_AGENT_PROFILES);
+      })
+      .catch(() => setProfiles(DEFAULT_AGENT_PROFILES));
     return () => {
       cancelled = true;
     };
   }, [dispatchToTab]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const workspace = localStorage.getItem("project") ?? "";
+      for (const tab of tabs) {
+        void invoke("agent_persist_session", {
+          tab: {
+            backend: tab.state.runtime ?? "codex",
+            id: tab.id,
+            opaqueSessionId: tab.state.sessionId,
+            profileId: tab.profileId,
+            queue: tab.queue,
+            state: tab.state,
+            title: tab.title,
+            updatedAt: 0,
+            workspace,
+            worktree: undefined,
+          },
+        }).catch(() => {
+          // Preserve in-memory operation when durable storage is unavailable.
+        });
+      }
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [tabs]);
 
   const injectAssistantNote = useCallback(
     (text: string) => {
@@ -194,8 +321,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setActiveTabId(tab.id);
   }, []);
 
-  const closeTab = useCallback((id: string) => {
-    void invoke("agent_end_session", { sessionId: id }).catch(() => {});
+  const closeTab = useCallback(async (id: string) => {
+    try {
+      await invoke("agent_end_session", { sessionId: id });
+    } catch (error) {
+      dispatchToTab(id, { type: "error", message: `Failed to close session: ${String(error)}` });
+      return;
+    }
     setTabs((current) => {
       if (current.length <= 1) {
         tabCounterRef.current += 1;
@@ -212,7 +344,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, []);
+  }, [dispatchToTab]);
 
   const flushQueue = useCallback(
     async (tabId: string) => {
@@ -231,7 +363,19 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         text: next,
       });
       try {
-        await invoke("agent_send", { sessionId: tabId, prompt: next });
+        await flushEditorContext();
+        await invoke(
+          "agent_send",
+          buildAgentSendPayload(
+            tabId,
+            buildAgentPrompt(
+              next,
+              getEditorContext(),
+              threadAttachmentsFor(next, tabsRef.current),
+            ),
+            next,
+          ),
+        );
       } catch (error) {
         dispatchToTab(tabId, { type: "error", message: String(error) });
       }
@@ -240,9 +384,20 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const unlisten = listen<AgentEvent>("agent-event", (event) => {
+    const unlisten = listen<RoutedAgentEvent>("agent-event", (event) => {
       const routed = event.payload as RoutedAgentEvent;
       dispatchToTab(routed.sessionId, routed);
+      if (routed.type === "file_changed" || routed.type === "file_touched") {
+        window.dispatchEvent(
+          new CustomEvent("rocket-agent-file-changed", {
+            detail: { path: routed.path, sessionId: routed.sessionId },
+          }),
+        );
+        void invoke("agent_attribute_path", { sessionId: routed.sessionId, path: routed.path }).catch(() => {
+          // Attribution failure is fail-safe: the subsequent workspace scan
+          // presents the path as ambiguous rather than silently owning it.
+        });
+      }
       // Auto-flush queued messages when a turn completes (Maestro pattern).
       if (routed.type === "turn_completed") {
         void flushQueue(routed.sessionId);
@@ -292,6 +447,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const setModelId = useCallback((next: string) => {
     const selected = findModel(next);
     if (!selected || selected.engine !== "codex") return;
+    if (!isModelSelectionChange(modelIdRef.current, next)) return;
     const active = tabsRef.current.find(
       (tab) => tab.id === activeTabIdRef.current,
     );
@@ -351,16 +507,27 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    dispatchToTab(tabId, { type: "session_connecting", runtime: "codex" });
+    const tabProfileId = tabsRef.current.find((tab) => tab.id === tabId)?.profileId ?? profileIdRef.current;
+    const selectedProfile = profiles.find((profile) => profile.id === tabProfileId)
+      ?? DEFAULT_AGENT_PROFILES[0];
+    if (!isRunnableProfile(selectedProfile)) {
+      dispatchToTab(tabId, {
+        type: "error",
+        message: `${selectedProfile.displayName} is not available in this build.`,
+      });
+      return false;
+    }
+    const runtime = "codex";
+    dispatchToTab(tabId, { type: "session_connecting", runtime });
     try {
-      await invoke("agent_start_session", {
+      await invoke<string>("agent_start_session", {
         sessionId: tabId,
         model: codexModelArg(modelIdRef.current),
         workspace,
       });
       dispatchToTab(tabId, {
         type: "session_ready",
-        runtime: "codex",
+        runtime,
         sessionId: tabId,
       });
       return true;
@@ -368,7 +535,16 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       dispatchToTab(tabId, { type: "error", message: String(error) });
       return false;
     }
-  }, [dispatchToTab]);
+  }, [dispatchToTab, profiles]);
+
+  const setProfileId=useCallback((next:string)=>{if(!profiles.some(p=>p.id===next))return;setProfileIdState(next);setConfig(current=>{const updated={...current,selectedProfileId:next};void saveAgentConfig(updated);return updated});void invoke("agent_end_session",{sessionId:activeTabIdRef.current}).catch(()=>{});setTabs(current=>mapTab(current,activeTabIdRef.current,tab=>({...tab,profileId:next,state:{...tab.state,sessionId:undefined,status:"disconnected"}})));},[profiles]);
+
+  const setWorkspaceMode = useCallback((workspaceMode: AgentWorkspaceMode) => {
+    setTabs((current) => mapTab(current, activeTabIdRef.current, (tab) => ({ ...tab, workspaceMode })));
+  }, []);
+  const setBaseRevision = useCallback((baseRevision: string) => {
+    setTabs((current) => mapTab(current, activeTabIdRef.current, (tab) => ({ ...tab, baseRevision })));
+  }, []);
 
   const clearActiveTab = useCallback(() => {
     const tabId = activeTabIdRef.current;
@@ -392,15 +568,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const runSlashCommand = useCallback(
     (raw: string) => {
-      const parsed = parseSlashInput(raw);
-      if (!parsed) return false;
-      const command = findSlashCommand(parsed.name);
-      if (!command) {
-        injectAssistantNote(
-          `Unknown command \`/${parsed.name}\`.\n\n${HELP_TEXT}`,
-        );
+      const validation = validateSlashInput(raw);
+      if (!validation) return false;
+      if (!validation.ok) {
+        injectAssistantNote(validation.error);
         return true;
       }
+      const { args, command } = validation;
 
       switch (command.name) {
         case "help":
@@ -417,10 +591,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           return true;
         }
         case "model":
-          if (parsed.args) {
+          if (args) {
             const match =
-              findModel(parsed.args) ||
-              findModel(`codex/${parsed.args}`);
+              findModel(args) ||
+              findModel(`codex/${args}`);
             if (match?.engine === "codex") {
               setModelId(match.id);
               injectAssistantNote(`Model set to **${match.displayName}**.`);
@@ -430,15 +604,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
               );
             } else {
               injectAssistantNote(
-                `Unknown model \`${parsed.args}\`. Use /model to open the picker.`,
+                `Unknown model \`${args}\`. Use /model to open the picker.`,
               );
             }
           } else {
             setModelPickerOpen(true);
           }
-          return true;
-        case "connect":
-          setModelPickerOpen(true);
           return true;
         case "sessions": {
           const list = tabsRef.current
@@ -458,28 +629,6 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         case "tools":
           injectAssistantNote(TOOLS_HELP);
           return true;
-        case "subagents":
-          injectAssistantNote(SUBAGENTS_HELP);
-          return true;
-        case "plan": {
-          const next = {
-            ...config,
-            planMode: !config.planMode,
-          };
-          setConfig(next);
-          void saveAgentConfig(next).catch((error) => {
-            dispatchToTab(activeTabIdRef.current, {
-              type: "error",
-              message: `Failed to save agent config: ${String(error)}`,
-            });
-          });
-          injectAssistantNote(
-            next.planMode
-              ? "Plan mode **on** (takes effect on Lava/Flue runtime)."
-              : "Plan mode **off**.",
-          );
-          return true;
-        }
         default:
           return true;
       }
@@ -527,6 +676,15 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (tab && tab.state.messages.length === 0 && isUntitledTab(tab.title)) {
+        setTabs((current) =>
+          mapTab(current, tabId, (entry) => ({
+            ...entry,
+            title: titleFromPrompt(text),
+          })),
+        );
+      }
+
       if (!hasSession) {
         const connected = await connect();
         if (!connected) return;
@@ -542,7 +700,19 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       );
 
       try {
-        await invoke("agent_send", { sessionId: tabId, prompt: text });
+        await flushEditorContext();
+        await invoke(
+          "agent_send",
+          buildAgentSendPayload(
+            tabId,
+            buildAgentPrompt(
+              text,
+              getEditorContext(),
+              threadAttachmentsFor(text, tabsRef.current),
+            ),
+            text,
+          ),
+        );
       } catch (error) {
         dispatchToTab(tabId, { type: "error", message: String(error) });
       }
@@ -601,6 +771,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       interrupt,
       modelId,
       modelPickerOpen,
+      profileId,
+      profiles,
+      updateProfiles: setProfiles,
       queuedMessages: activeTab?.queue ?? [],
       respondApproval,
       runSlashCommand,
@@ -609,7 +782,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       setDraft,
       setFollowAgent,
       setModelId,
+      setProfileId,
       setModelPickerOpen,
+      setWorkspaceMode,
+      setBaseRevision,
       state,
       tabStatus: deriveTabStatus(state),
       tabs,
@@ -626,11 +802,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       interrupt,
       modelId,
       modelPickerOpen,
+      profileId,
+      profiles,
       respondApproval,
       runSlashCommand,
       send,
       setDraft,
       setModelId,
+      setProfileId,
       state,
       tabs,
     ],

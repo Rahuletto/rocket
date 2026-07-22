@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { agentSessionReducer, initialAgentSessionState } from "./reducer";
+import type { AgentEvent } from "./protocol";
 
 describe("agentSessionReducer", () => {
+  it("routes startup and update backend events without losing state", () => {
+    const ready = agentSessionReducer(initialAgentSessionState, { type: "session_ready", runtime: "acp", sessionId: "tab-1" });
+    const capabilities = { backendId: "acp-v1", raw: { session: { configOptions: [{ id: "model" }] } } };
+    const started = agentSessionReducer(ready, { type: "backend_event", event: "capabilities", payload: capabilities });
+    const updated = agentSessionReducer(started, { type: "backend_event", event: "config_option_update", payload: { update: { currentValue: "fast" } } });
+    const future = agentSessionReducer(updated, { type: "future_event", value: true } as unknown as AgentEvent);
+
+    expect(updated.backendCapabilities).toEqual(capabilities);
+    expect(updated.backendConfig).toEqual({ update: { currentValue: "fast" } });
+    expect(updated.backendEvents.map((event) => event.event)).toEqual(["capabilities", "config_option_update"]);
+    expect(future).toBe(updated);
+    expect(future.status).toBe("idle");
+  });
+
   it("accumulates streaming assistant text into one message", () => {
     const started = agentSessionReducer(initialAgentSessionState, {
       type: "turn_started",

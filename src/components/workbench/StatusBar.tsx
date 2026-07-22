@@ -7,11 +7,14 @@ import {
 } from "lucide-react";
 import { useGit } from "../../provider/GitContext";
 import { useWorkbench } from "../../provider/WorkbenchContext";
+import { useLsp } from "../../provider/LspContext";
 
 export default function StatusBar() {
   const { ahead, behind, branch, files, isRepository, loading, refresh } =
     useGit();
-  const { terminalOpen, toggleTerminal } = useWorkbench();
+  const { terminalOpen, toggleTerminal, problemsOpen, setProblemsOpen } = useWorkbench();
+  const { diagnostics, status } = useLsp();
+  const problemCount = diagnostics.reduce((count, item) => count + item.diagnostics.length, 0);
 
   return (
     <footer className="status-bar">
@@ -24,6 +27,9 @@ export default function StatusBar() {
         >
           <TerminalSquare size={12} />
           Terminal
+        </button>
+        <button className={problemsOpen ? "active" : ""} onClick={() => setProblemsOpen(!problemsOpen)} title={status.message} type="button">
+          <Braces size={12} /> Problems {problemCount}
         </button>
         {isRepository && (
           <button onClick={refresh} title="Refresh repository" type="button">

@@ -28,10 +28,9 @@ export default function Sidebar() {
     localStorage.removeItem("directories");
     localStorage.setItem("project", selectedPath);
     setProjectName(selectedPath);
+    await watch(`${selectedPath}/`);
+    await readAndSet(`${selectedPath}/`, setFiles);
     window.dispatchEvent(new Event("rocket-workspace-changed"));
-
-    readAndSet(`${selectedPath}/`, setFiles);
-    watch(`${selectedPath}/`);
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
@@ -39,8 +38,7 @@ export default function Sidebar() {
     const project = localStorage.getItem("project");
     if (project) {
       setProjectName(project);
-      readAndSet(`${project}/`, setFiles);
-      watch(`${project}/`);
+      watch(`${project}/`).then(() => readAndSet(`${project}/`, setFiles)).catch(console.error);
     }
 
     const watchChange = listen("file-changed", () => {

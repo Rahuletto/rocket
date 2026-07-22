@@ -8,7 +8,7 @@ import {
 } from "react";
 import { disposeListener } from "../helpers/events";
 
-export type WorkbenchView = "explorer" | "git";
+export type WorkbenchView = "explorer" | "git" | "search";
 
 interface WorkbenchContextValue {
   activeView: WorkbenchView;
@@ -18,6 +18,8 @@ interface WorkbenchContextValue {
   setAgentOpen: (open: boolean) => void;
   setNavigatorOpen: (open: boolean) => void;
   setTerminalOpen: (open: boolean) => void;
+  problemsOpen: boolean;
+  setProblemsOpen: (open: boolean) => void;
   toggleAgent: () => void;
   toggleNavigator: (view?: WorkbenchView) => void;
   terminalOpen: boolean;
@@ -33,6 +35,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [agentOpen, setAgentOpen] = useState(false);
   const [navigatorOpen, setNavigatorOpen] = useState(true);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [problemsOpen, setProblemsOpen] = useState(false);
   const [layoutSwapped, setLayoutSwapped] = useState(false);
 
   useEffect(() => {
@@ -67,6 +70,8 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
         setAgentOpen,
         setNavigatorOpen,
         setTerminalOpen,
+        problemsOpen,
+        setProblemsOpen,
         toggleAgent: () => setAgentOpen((current) => !current),
         toggleNavigator: (view) => {
           if (view && view !== activeView) {

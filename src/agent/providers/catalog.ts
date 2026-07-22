@@ -42,24 +42,6 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
         id: "codex/default",
         providerId: "codex",
       },
-      {
-        displayName: "Codex · o3",
-        engine: "codex",
-        id: "codex/o3",
-        providerId: "codex",
-      },
-      {
-        displayName: "Codex · o4-mini",
-        engine: "codex",
-        id: "codex/o4-mini",
-        providerId: "codex",
-      },
-      {
-        displayName: "Codex · gpt-5",
-        engine: "codex",
-        id: "codex/gpt-5",
-        providerId: "codex",
-      },
     ],
     name: "Codex",
   },
@@ -218,6 +200,13 @@ export function findModel(modelId: string): ModelInfo | undefined {
 
 export function getProvider(id: ProviderId): ProviderDef | undefined {
   return PROVIDER_CATALOG.find((provider) => provider.id === id);
+}
+
+export function isModelSelectionChange(
+  currentModelId: string,
+  nextModelId: string,
+): boolean {
+  return currentModelId !== nextModelId;
 }
 
 export const DEFAULT_MODEL_ID = "codex/default";

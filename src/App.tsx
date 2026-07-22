@@ -7,6 +7,8 @@ import { useSource } from "./provider/SourceContext";
 import WorkspacePanel from "./components/workbench/WorkspacePanel";
 import FileSwitcher from "./components/workbench/FileSwitcher";
 import TerminalPanel from "./components/terminal/TerminalPanel";
+import ProblemsPanel from "./components/lsp/ProblemsPanel";
+import StatusBar from "./components/workbench/StatusBar";
 import QuickViewDialog from "./components/QuickViewDialog";
 import { useWorkbench } from "./provider/WorkbenchContext";
 import { getBuiltInSpriteSheet } from "@pierre/trees";
@@ -19,6 +21,7 @@ export default function App() {
     agentOpen,
     navigatorOpen,
     terminalOpen,
+    problemsOpen,
     layoutSwapped,
   } = useWorkbench();
 
@@ -34,13 +37,13 @@ export default function App() {
   // can play without unmounting xterm mid-flight (which is expensive).
   const [terminalMounted, setTerminalMounted] = useState(terminalOpen);
   useEffect(() => {
-    if (terminalOpen) {
+    if (terminalOpen || problemsOpen) {
       setTerminalMounted(true);
       return;
     }
     const t = window.setTimeout(() => setTerminalMounted(false), 240);
     return () => window.clearTimeout(t);
-  }, [terminalOpen]);
+  }, [terminalOpen, problemsOpen]);
 
   useEffect(() => {
     if (followAgent && state.latestTouchedFile) {
@@ -220,15 +223,15 @@ export default function App() {
                 id="terminal-panel"
                 initial={false}
                 animate={{
-                  height: terminalOpen ? terminalHeight + 9 : 0,
-                  opacity: terminalOpen ? 1 : 0,
+                  height: terminalOpen || problemsOpen ? terminalHeight + 9 : 0,
+                  opacity: terminalOpen || problemsOpen ? 1 : 0,
                 }}
                 transition={terminalResizing ? { duration: 0 } : { duration: 0.22, ease: "easeOut" }}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  pointerEvents: terminalOpen ? "auto" : "none",
+                  pointerEvents: terminalOpen || problemsOpen ? "auto" : "none",
                 }}
               >
                 <div
@@ -243,7 +246,7 @@ export default function App() {
                   }}
                 />
                 <div className="terminal-island" style={{ flex: 1, minHeight: 0 }}>
-                  {terminalMounted && <TerminalPanel />}
+                  {terminalMounted && (problemsOpen ? <ProblemsPanel /> : <TerminalPanel />)}
                 </div>
               </motion.div>
             </div>
@@ -255,6 +258,7 @@ export default function App() {
           </AnimatePresence>
         </div>
       </div>
+      <StatusBar />
       <FileSwitcher />
       <QuickViewDialog />
       <div

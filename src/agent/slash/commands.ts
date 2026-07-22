@@ -1,4 +1,5 @@
 export interface SlashCommand {
+  arguments: "none" | "optional-single";
   description: string;
   /** Host-handled (not sent to the model). */
   host: boolean;
@@ -7,16 +8,13 @@ export interface SlashCommand {
 
 /** GUI-relevant subset of lavalamp slash commands. */
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { description: "Show available commands", host: true, name: "help" },
-  { description: "Clear this chat transcript", host: true, name: "clear" },
-  { description: "Open a new agent chat tab", host: true, name: "new" },
-  { description: "Show or change the model", host: true, name: "model" },
-  { description: "Connect providers", host: true, name: "connect" },
-  { description: "List agent chat tabs", host: true, name: "sessions" },
-  { description: "Show workspace path", host: true, name: "workspace" },
-  { description: "List available tools", host: true, name: "tools" },
-  { description: "List subagents / experts", host: true, name: "subagents" },
-  { description: "Toggle plan mode (Flue runtime)", host: true, name: "plan" },
+  { arguments: "none", description: "Show available commands", host: true, name: "help" },
+  { arguments: "none", description: "Clear this chat transcript", host: true, name: "clear" },
+  { arguments: "none", description: "Open a new agent chat tab", host: true, name: "new" },
+  { arguments: "optional-single", description: "Show or change the model", host: true, name: "model" },
+  { arguments: "none", description: "List agent chat tabs", host: true, name: "sessions" },
+  { arguments: "none", description: "Show workspace path", host: true, name: "workspace" },
+  { arguments: "none", description: "List available tools", host: true, name: "tools" },
 ];
 
 export function parseSlashInput(raw: string): {
@@ -38,15 +36,36 @@ export function findSlashCommand(name: string): SlashCommand | undefined {
   return SLASH_COMMANDS.find((command) => command.name === name);
 }
 
+export type SlashValidation =
+  | { args: string; command: SlashCommand; ok: true }
+  | { error: string; ok: false };
+
+export function validateSlashInput(raw: string): SlashValidation | null {
+  const parsed = parseSlashInput(raw);
+  if (!parsed) return null;
+  const command = findSlashCommand(parsed.name);
+  if (!command) {
+    return {
+      error: `Unknown command \`/${parsed.name}\`.`,
+      ok: false,
+    };
+  }
+  if (command.arguments === "none" && parsed.args) {
+    return { error: `Usage: /${command.name}`, ok: false };
+  }
+  if (
+    command.arguments === "optional-single" &&
+    parsed.args.split(/\s+/).filter(Boolean).length > 1
+  ) {
+    return { error: `Usage: /${command.name} [model-id]`, ok: false };
+  }
+  return { args: parsed.args, command, ok: true };
+}
+
 export const HELP_TEXT = SLASH_COMMANDS.map(
   (command) => `/${command.name} — ${command.description}`,
 ).join("\n");
 
 export const TOOLS_HELP =
-  "Codex runtime: tools are provided by Codex (shell, file edits, search).\n" +
-  "Lava (Flue) runtime: lavalamp-class tools — read/write/edit, ripgrep, codebase_search, " +
-  "semantic search, graph, skills, experts, parallel subagents (coming online as the Lava sidecar ships).";
-
-export const SUBAGENTS_HELP =
-  "Experts (Lava runtime): ui, refactor, logic, database, oracle, research, critique, spectacle.\n" +
-  "Parallel subagents: deploy_parallel_subs for multi-agent research (Lava).";
+  "Codex provides repository search, file reads and edits, patches, and shell commands.\n" +
+  "Rocket adds active editor selection, visible code, diagnostics, changed-file refresh, and Git review context.";

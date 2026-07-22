@@ -6,9 +6,11 @@ import type {
 
 export const initialAgentSessionState: AgentSessionState = {
   approvals: [],
+  backendEvents: [],
   changedFiles: [],
   messages: [],
   reasoning: "",
+  runtimeConnection: "offline",
   status: "disconnected",
   tools: {},
 };
@@ -55,6 +57,8 @@ export function agentSessionReducer(
         ...state,
         runtime: event.runtime,
         sessionId: event.sessionId,
+        runtimeConnection: "connected",
+        runtimeContext: "new",
         status: "idle",
       };
     case "turn_started":
@@ -173,7 +177,21 @@ export function agentSessionReducer(
         status: "idle",
         turnId: event.turnId,
       };
+    case "backend_event": {
+      const backendEvent = { event: event.event, payload: event.payload };
+      const snapshot = event.payload && typeof event.payload === "object"
+        ? event.payload as Record<string, unknown>
+        : undefined;
+      return {
+        ...state,
+        backendEvents: [...state.backendEvents, backendEvent].slice(-100),
+        backendCapabilities: event.event === "capabilities" ? snapshot : state.backendCapabilities,
+        backendConfig: event.event === "config_option_update" ? event.payload : state.backendConfig,
+      };
+    }
     case "error":
       return { ...state, error: event.message, status: "error" };
+    default:
+      return state;
   }
 }

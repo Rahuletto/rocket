@@ -1,8 +1,11 @@
 mod codex;
+pub(crate) mod profiles;
 mod protocol;
+mod references;
 pub(crate) mod storage;
 
-use codex::CodexProcess;
+use codex::{discover_skills, CodexProcess};
+use references::SkillEntry;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -111,31 +114,10 @@ pub fn agent_list_files(
 }
 
 #[tauri::command]
-pub fn agent_list_skills(folder_path: String) -> Result<Vec<String>, String> {
-    let mut skills = Vec::new();
-    let candidates = [
-        PathBuf::from(&folder_path).join(".agents").join("skills"),
-        PathBuf::from(&folder_path)
-            .join("..")
-            .join(".agents")
-            .join("skills"),
-    ];
-    for dir in candidates {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && path.join("SKILL.md").is_file() {
-                if let Some(name) = entry.file_name().to_str() {
-                    skills.push(name.to_string());
-                }
-            }
-        }
-    }
-    skills.sort();
-    skills.dedup();
-    Ok(skills)
+pub async fn agent_list_skills(folder_path: String) -> Result<Vec<SkillEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || discover_skills(&folder_path))
+        .await
+        .map_err(|error| format!("Codex skill discovery task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -162,12 +144,13 @@ pub fn agent_send(
     manager: tauri::State<AgentManager>,
     session_id: String,
     prompt: String,
+    reference_text: Option<String>,
 ) -> Result<String, String> {
     let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
     sessions
         .get_mut(&session_id)
         .ok_or_else(|| format!("No agent session for {session_id}"))?
-        .send(&prompt)
+        .send(&prompt, reference_text.as_deref().unwrap_or(&prompt))
 }
 
 #[tauri::command]

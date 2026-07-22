@@ -12,12 +12,28 @@ const sources = {
     { description: "Clear chat", name: "clear" },
     { description: "Pick model", name: "model" },
   ],
-  files: ["src/App.tsx", "src/agent/protocol.ts", "README.md"],
+  files: [
+    "src/App.tsx",
+    "src/agent/protocol.ts",
+    "docs/My Guide.md",
+    "README.md",
+  ],
   sessions: [
     { id: "tab-abc12345", name: "Chat 1" },
     { id: "tab-def67890", name: "Fix auth" },
   ],
-  skills: ["review", "deslop"],
+  skills: [
+    {
+      description: "Review code for correctness",
+      name: "review",
+      path: "/skills/review/SKILL.md",
+    },
+    {
+      description: "Remove generated code slop",
+      name: "deslop",
+      path: "/skills/deslop/SKILL.md",
+    },
+  ],
 };
 
 describe("detectCompletionQuery", () => {
@@ -87,6 +103,11 @@ describe("detectCompletionQuery", () => {
     expect(detectCompletionQuery("issue#123")).toBeNull();
   });
 
+  it("does not treat email or mid-word $ as reference triggers", () => {
+    expect(detectCompletionQuery("email dev@example.com")).toBeNull();
+    expect(detectCompletionQuery("price US$10")).toBeNull();
+  });
+
   it("detects slash after newline", () => {
     expect(detectCompletionQuery("hello\n/cl")).toMatchObject({
       kind: "slash",
@@ -128,9 +149,21 @@ describe("buildCompletions", () => {
     expect(items[0]?.insert).toContain("App.tsx");
   });
 
+  it("wraps file paths containing spaces in braces", () => {
+    const items = buildCompletions("@Guide", sources);
+
+    expect(items[0]?.insert).toBe("@{docs/My Guide.md} ");
+    expect(
+      detectCompletionQuery("Inspect @{docs/My Gu"),
+    ).toMatchObject({ kind: "at", query: "docs/My Gu" });
+  });
+
   it("returns skills for #", () => {
     const items = buildCompletions("#des", sources);
     expect(items.map((item) => item.label)).toContain("#deslop");
+    expect(items.find((item) => item.label === "#deslop")?.description).toBe(
+      "Remove generated code slop",
+    );
   });
 
   it("returns sessions for $", () => {

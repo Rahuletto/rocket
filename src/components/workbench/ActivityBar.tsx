@@ -40,7 +40,14 @@ export default function ActivityBar() {
           <GitBranch size={19} />
           {files.length > 0 && <span className="activity-badge">{files.length}</span>}
         </button>
-        <button aria-label="Search" disabled title="Search" type="button">
+        <button
+          aria-label="Search"
+          aria-pressed={activeView === "search"}
+          className={navigatorOpen && activeView === "search" ? "active" : ""}
+          onClick={() => toggleNavigator("search")}
+          title="Search"
+          type="button"
+        >
           <Search size={19} />
         </button>
         <button

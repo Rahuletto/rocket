@@ -8,6 +8,7 @@ import {
 export interface AgentUserConfig {
   baseUrls: Partial<Record<ProviderId, string>>;
   defaultModelId: string;
+  selectedProfileId: string;
   planMode: boolean;
 }
 
@@ -20,6 +21,7 @@ export interface ProviderStatus {
 export const DEFAULT_AGENT_CONFIG: AgentUserConfig = {
   baseUrls: {},
   defaultModelId: DEFAULT_MODEL_ID,
+  selectedProfileId: "codex-native",
   planMode: false,
 };
 

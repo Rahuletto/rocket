@@ -2,6 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { readDirectory } from "../helpers/filesys";
 import type { File, Folder } from "../types/File";
 
+export interface AgentSkillReference {
+  description: string;
+  name: string;
+  path: string;
+}
+
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -58,9 +64,11 @@ export async function listWorkspaceFiles(workspace: string): Promise<string[]> {
   }
 }
 
-export async function listWorkspaceSkills(workspace: string): Promise<string[]> {
+export async function listWorkspaceSkills(
+  workspace: string,
+): Promise<AgentSkillReference[]> {
   try {
-    const native = await invoke<string[]>("agent_list_skills", {
+    const native = await invoke<AgentSkillReference[]>("agent_list_skills", {
       folderPath: workspace,
     }).catch(() => null);
     if (native) return native;
@@ -69,8 +77,12 @@ export async function listWorkspaceSkills(workspace: string): Promise<string[]> 
     const entries = await readDirectory(skillsDir);
     return entries
       .filter((entry) => entry.kind === "directory")
-      .map((entry) => entry.name)
-      .sort();
+      .map((entry) => ({
+        description: "Workspace skill",
+        name: entry.name,
+        path: `${skillsDir}/${entry.name}/SKILL.md`,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
   } catch {
     return [];
   }

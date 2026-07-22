@@ -133,6 +133,20 @@ but their models remain disabled until the Lava sidecar runtime lands.
 
 ## Contributing
 
+### Language-server security boundary
+
+Rocket launches the TypeScript language server with a cleared environment. The safe
+allowlist copied to it is `PATH`, `HOME`, `TMPDIR`, `TMP`, `TEMP`, `SystemRoot`, `WINDIR`,
+and `PATHEXT`; provider credentials and other application variables are not inherited.
+All file URIs returned by the server are parsed with a standards-compliant URL library,
+canonicalized, and required to remain under the canonical workspace root before a
+response reaches Monaco. A workspace edit is rejected as a whole when any target fails
+that check, and code-action commands are removed (workspace edits remain available).
+LSP framing permits at most 8 KiB of headers and a 16 MiB body. Graceful shutdown is
+bounded, after which Rocket kills and reaps the server process group on Unix. Windows
+uses `taskkill /T`; a descendant deliberately detached from that process tree is a known
+platform limitation until native Job Objects are used.
+
 We’d love your help to make Rocket even better. Here’s how you can get involved:
 1. Fork the repository on GitHub.
 2. Create a new branch for your feature or bug fix.

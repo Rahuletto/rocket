@@ -1,8 +1,9 @@
 import GitPanel from "../git/GitPanel";
 import Sidebar from "../Sidebar";
 import { useWorkbench } from "../../provider/WorkbenchContext";
-import { Files, GitBranch, X } from "lucide-react";
+import { Files, GitBranch, Search, X } from "lucide-react";
 import { useGit } from "../../provider/GitContext";
+import SearchPanel from "../search/SearchPanel";
 
 export default function WorkspacePanel() {
   const { files } = useGit();
@@ -21,6 +22,17 @@ export default function WorkspacePanel() {
             type="button"
           >
             <Files size={15} />
+          </button>
+          <button
+            aria-label="Search"
+            aria-selected={activeView === "search"}
+            className={activeView === "search" ? "active" : ""}
+            onClick={() => setActiveView("search")}
+            role="tab"
+            title="Search"
+            type="button"
+          >
+            <Search size={15} />
           </button>
           <button
             aria-label="Git"
@@ -45,7 +57,7 @@ export default function WorkspacePanel() {
         </button>
       </header>
       <div className="workspace-region-content">
-        {activeView === "git" ? <GitPanel /> : <Sidebar />}
+        {activeView === "git" ? <GitPanel /> : activeView === "search" ? <SearchPanel /> : <Sidebar />}
       </div>
     </section>
   );

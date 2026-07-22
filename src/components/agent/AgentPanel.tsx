@@ -1,8 +1,12 @@
 import {
   ArrowUp,
+  Bot,
+  CircleAlert,
   ChevronDown,
   Crosshair,
+  FileCode2,
   FileDiff,
+  GitBranch,
   LoaderCircle,
   Plus,
   Square,
@@ -15,27 +19,44 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   applyCompletion,
   buildCompletions,
   type CompletionItem,
 } from "../../agent/composer/completion";
-import { listWorkspaceFiles, listWorkspaceSkills } from "../../agent/discover";
+import {
+  listWorkspaceFiles,
+  listWorkspaceSkills,
+  type AgentSkillReference,
+} from "../../agent/discover";
 import { findModel } from "../../agent/providers/catalog";
 import { SLASH_COMMANDS } from "../../agent/slash/commands";
 import { deriveTabStatus } from "../../agent/protocol";
 import { useAgent } from "../../provider/AgentContext";
+import { useReview, type ReviewFile } from "../../provider/ReviewContext";
 import { useSource } from "../../provider/SourceContext";
+import { invoke } from "@tauri-apps/api/core";
+import { advertisedOptions } from "../../agent/profiles";
 import AgentMessage from "./AgentMessage";
 import ApprovalPrompt from "./ApprovalPrompt";
 import ComposerAutocomplete from "./ComposerAutocomplete";
 import ComposerInput from "./ComposerInput";
-import ModelPicker from "./ModelPicker";
+import ProfilePicker from "./ProfilePicker";
 import ToolActivity from "./ToolActivity";
+import WorktreeControls from "./WorktreeControls";
+import {
+  getEditorContext,
+  subscribeEditorContext,
+  toWorkspaceRelativePath,
+} from "../../agent/editorContext";
+import { useGit } from "../../provider/GitContext";
 
 export default function AgentPanel() {
   const { projectName } = useSource();
+  const { openReview } = useReview();
+  const { diff } = useGit();
   const {
     activeTabId,
     closeTab,
@@ -44,12 +65,16 @@ export default function AgentPanel() {
     interrupt,
     modelId,
     modelPickerOpen,
+    profileId,
+    profiles,
+    updateProfiles,
     respondApproval,
     send,
     setActiveTabId,
     setDraft,
     setFollowAgent,
     setModelId,
+    setProfileId,
     setModelPickerOpen,
     state,
     tabs,
@@ -69,13 +94,47 @@ export default function AgentPanel() {
   const canSend = Boolean(prompt.trim()) && state.status !== "running";
 
   const [files, setFiles] = useState<string[]>([]);
-  const [skills, setSkills] = useState<string[]>([]);
+  const [skills, setSkills] = useState<AgentSkillReference[]>([]);
   const [selectedCompletion, setSelectedCompletion] = useState(0);
   const [composerCursor, setComposerCursor] = useState(0);
   const [completionDismissed, setCompletionDismissed] = useState(false);
+  const editorContext = useSyncExternalStore(
+    subscribeEditorContext,
+    getEditorContext,
+    getEditorContext,
+  );
 
   const model = findModel(modelId);
-  const modelLabel = model?.displayName ?? "Codex";
+  const selectedProfile = profiles.find((profile) => profile.id === profileId);
+  const advertised=advertisedOptions(selectedProfile);
+  const profileLabel = selectedProfile?.displayName ?? "Codex";
+  const modelLabel = model?.displayName ?? "Default model";
+  const fetchChanges = async (): Promise<ReviewFile[]> => {
+    const workspace = projectName || localStorage.getItem("project") || "";
+    return Promise.all(
+      state.changedFiles.map(async (file) => {
+        const path = toWorkspaceRelativePath(file.path, workspace);
+        return {
+          additions: file.additions,
+          deletions: file.deletions,
+          kind: "modified" as const,
+          patch: await diff(path, false),
+          path,
+        };
+      }),
+    );
+  };
+  const reviewChanges = async () => {
+    try {
+      const files = await fetchChanges();
+      openReview({
+        files,
+        source: "agent",
+        title: activeTab?.title ?? "Agent changes",
+        onRefresh: fetchChanges,
+      });
+    } catch (error) { alert(String(error)); }
+  };
 
   useEffect(() => {
     const workspace = projectName || localStorage.getItem("project");
@@ -101,10 +160,12 @@ export default function AgentPanel() {
         name: command.name,
       })),
       files,
-      sessions: tabs.map((tab) => ({ id: tab.id, name: tab.title })),
+      sessions: tabs
+        .filter((tab) => tab.id !== activeTabId)
+        .map((tab) => ({ id: tab.id, name: tab.title })),
       skills,
     }),
-    [files, skills, tabs],
+    [activeTabId, files, skills, tabs],
   );
 
   const completions = useMemo(
@@ -193,6 +254,15 @@ export default function AgentPanel() {
   return (
     <aside className="agent-panel">
       <header className="agent-panel-header">
+        {state.runtimeContext === "restored" &&
+          state.runtimeConnection === "offline" && (
+            <span
+              className="agent-runtime-state"
+              title="The transcript and review state were restored, but the agent runtime did not resume. Sending starts a new runtime context."
+            >
+              Restored · runtime offline
+            </span>
+          )}
         <div className="agent-tab-bar" role="tablist" aria-label="Agent chats">
           {tabs.map((tab) => {
             const selected = tab.id === activeTabId;
@@ -234,9 +304,9 @@ export default function AgentPanel() {
                 <button
                   aria-label={`Close ${tab.title}`}
                   className="agent-tab-close"
-                  onClick={(event) => {
+                  onClick={async (event) => {
                     event.stopPropagation();
-                    closeTab(tab.id);
+                    await closeTab(tab.id);
                   }}
                   type="button"
                 >
@@ -260,6 +330,7 @@ export default function AgentPanel() {
             <button
               aria-label={`${state.changedFiles.length} changed files`}
               className="agent-icon-button"
+              onClick={() => void reviewChanges()}
               title="Review changes"
               type="button"
             >
@@ -271,6 +342,7 @@ export default function AgentPanel() {
       </header>
 
       <div className="agent-transcript" ref={scrollRef}>
+        {activeTab?.workspaceMode === "isolated-worktree" && state.sessionId && <WorktreeControls sessionId={activeTabId} onDiscard={async () => { await closeTab(activeTabId); }} />}
         {isEmpty ? (
           <div className="agent-empty" />
         ) : (
@@ -304,6 +376,25 @@ export default function AgentPanel() {
       </div>
 
       <form className="agent-composer" onSubmit={submit}>
+        {editorContext && (
+          <div className="agent-context-strip" aria-label="Editor context sent with prompts">
+            <span title={editorContext.path}>
+              <FileCode2 size={12} />
+              {editorContext.path.split(/[\\/]/).pop()}
+            </span>
+            <span>
+              {editorContext.selection
+                ? `L${editorContext.selection.startLine}–${editorContext.selection.endLine}`
+                : `L${editorContext.cursor.line}`}
+            </span>
+            {editorContext.diagnostics.length > 0 && (
+              <span title="Current editor diagnostics are included">
+                <CircleAlert size={12} />
+                {editorContext.diagnostics.length}
+              </span>
+            )}
+          </div>
+        )}
         <div className="agent-composer-body">
           {completions.length > 0 && (
             <ComposerAutocomplete
@@ -314,13 +405,17 @@ export default function AgentPanel() {
             />
           )}
           {modelPickerOpen && (
-            <ModelPicker
+            <ProfilePicker
               modelId={modelId}
+              profiles={profiles}
+              profileId={profileId}
+              onProfiles={updateProfiles}
               onClose={() => setModelPickerOpen(false)}
-              onSelect={(next) => {
-                setModelId(next.id);
+              onSelectModel={(nextModel) => {
+                setModelId(nextModel.id);
                 setModelPickerOpen(false);
               }}
+              onSelectProfile={setProfileId}
             />
           )}
           <ComposerInput
@@ -349,22 +444,42 @@ export default function AgentPanel() {
               }
             }}
             onKeyDown={onComposerKeyDown}
-            placeholder="Ask Agent · / commands · @ files · $ sessions · # skills"
+            placeholder="Message agent…"
             ref={textareaRef}
             value={prompt}
           />
         </div>
         <div className="agent-composer-footer">
           <div className="agent-composer-meta">
+            <span
+              aria-label={
+                activeTab?.workspaceMode === "isolated-worktree"
+                  ? "Agent workspace: isolated worktree based on HEAD"
+                  : "Agent workspace: current workspace"
+              }
+              className="agent-mode-chip agent-workspace-chip"
+              title={
+                activeTab?.workspaceMode === "isolated-worktree"
+                  ? "Changes are isolated in a Git worktree based on HEAD"
+                  : "Agent reads and edits the open workspace"
+              }
+            >
+              <GitBranch size={12} />
+              <span>{activeTab?.workspaceMode === "isolated-worktree" ? "Worktree" : "Workspace"}</span>
+              {activeTab?.workspaceMode === "isolated-worktree" && !state.sessionId && <small>HEAD</small>}
+            </span>
             <button
-              className="agent-mode-chip"
+              aria-expanded={modelPickerOpen}
+              className="agent-mode-chip agent-profile-chip agent-runtime-chip"
               onClick={() => setModelPickerOpen((open) => !open)}
-              title="Select model / connect providers"
+              title={selectedProfile?.backendKind === "acp-v1" ? `Agent: ${profileLabel}` : `Agent: ${profileLabel} · Model: ${modelLabel}`}
               type="button"
             >
-              {modelLabel}
+              <Bot size={12} />
+              <span>{selectedProfile?.backendKind === "acp-v1" ? profileLabel : `${profileLabel} · ${modelLabel.replace(/^Codex · /, "").replace("Codex (default)", "Default")}`}</span>
               <ChevronDown size={12} />
             </button>
+            {selectedProfile?.backendKind==="acp-v1"&&advertised.map((option,index)=>{const values=(option.options??option.values) as Array<Record<string,unknown>>|undefined;if(!Array.isArray(values)||values.length===0)return null;const id=String(option.id??index);return <select aria-label={String(option.name??option.title??id)} key={id} defaultValue={String(option.currentValue??option.value??values[0]?.value??values[0]?.id)} onChange={event=>void invoke("agent_set_config_option",{sessionId:activeTabId,optionId:id,value:event.target.value})}>{values.map((value,i)=>{const opaque=String(value.value??value.id??i);return <option key={opaque} value={opaque}>{String(value.name??value.label??opaque)}</option>})}</select>})}
           </div>
           <div className="agent-composer-actions">
             <button

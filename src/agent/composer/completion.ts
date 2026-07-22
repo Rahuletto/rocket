@@ -17,7 +17,7 @@ export interface CompletionSources {
   commands: Array<{ description?: string; name: string }>;
   files: string[];
   sessions: Array<{ id: string; name: string }>;
-  skills: string[];
+  skills: Array<{ description: string; name: string; path: string }>;
 }
 
 /** Detect trailing / @ $ # trigger in the text before the cursor. */
@@ -40,7 +40,7 @@ export function detectCompletionQuery(
   }
 
   // `(?:\$\{|\$)` consumes `{` when present; capture is only the id tail.
-  const sessionMatch = /(?:\$\{|\$)([^\s}]*)$/.exec(before);
+  const sessionMatch = /(?:^|\s)(?:\$\{|\$)([^\s}]*)$/.exec(before);
   if (sessionMatch) {
     return {
       baseIndex: before.lastIndexOf("$"),
@@ -49,7 +49,9 @@ export function detectCompletionQuery(
     };
   }
 
-  const atMatch = /@([^\s]*)$/.exec(before);
+  const atMatch =
+    /(?:^|\s)@\{([^}]*)$/.exec(before) ??
+    /(?:^|\s)@([^\s]*)$/.exec(before);
   if (atMatch) {
     return {
       baseIndex: before.lastIndexOf("@"),
@@ -138,16 +140,22 @@ export function buildCompletions(
     }
     case "at":
       return fuzzySearch(query, sources.files).map((file) => ({
-        insert: `@${file} `,
+        insert: /\s/.test(file) ? `@{${file}} ` : `@${file} `,
         kind,
         label: `@${file}`,
       }));
-    case "hash":
-      return fuzzySearch(query, sources.skills).map((skill) => ({
-        insert: `#${skill} `,
-        kind,
-        label: `#${skill}`,
-      }));
+    case "hash": {
+      const names = sources.skills.map((skill) => skill.name);
+      return fuzzySearch(query, names).map((name) => {
+        const skill = sources.skills.find((entry) => entry.name === name);
+        return {
+          description: skill?.description,
+          insert: `#${name} `,
+          kind,
+          label: `#${name}`,
+        };
+      });
+    }
     case "session": {
       const q = query.toLowerCase();
       return sources.sessions

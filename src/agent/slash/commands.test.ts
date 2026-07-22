@@ -4,6 +4,8 @@ import {
   HELP_TEXT,
   parseSlashInput,
   SLASH_COMMANDS,
+  TOOLS_HELP,
+  validateSlashInput,
 } from "./commands";
 
 describe("slash command registry", () => {
@@ -36,5 +38,40 @@ describe("slash command registry", () => {
       expect(names).toContain(required);
       expect(HELP_TEXT).toContain(`/${required}`);
     }
+  });
+
+  it("does not advertise commands with no working native runtime behavior", () => {
+    const names = SLASH_COMMANDS.map((command) => command.name);
+    expect(names).not.toContain("subagents");
+    expect(names).not.toContain("plan");
+    expect(names).not.toContain("connect");
+    expect(TOOLS_HELP).not.toContain("coming online");
+  });
+
+  it("rejects arguments for commands that take none", () => {
+    expect(validateSlashInput("/clear later")).toEqual({
+      error: "Usage: /clear",
+      ok: false,
+    });
+    expect(validateSlashInput("/sessions extra")).toEqual({
+      error: "Usage: /sessions",
+      ok: false,
+    });
+  });
+
+  it("accepts one optional model identifier", () => {
+    const valid = validateSlashInput("/model codex/default");
+    expect(valid?.ok).toBe(true);
+    expect(validateSlashInput("/model one two")).toEqual({
+      error: "Usage: /model [model-id]",
+      ok: false,
+    });
+  });
+
+  it("returns a precise unknown-command error", () => {
+    expect(validateSlashInput("/missing")).toEqual({
+      error: "Unknown command `/missing`.",
+      ok: false,
+    });
   });
 });

@@ -15,6 +15,8 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+use crate::workspace::WorkspacePolicy;
+
 type Pending = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
 
 struct ManagedChild(Child);
@@ -145,6 +147,8 @@ impl CodexProcess {
         workspace: &str,
         model: Option<&str>,
         session_id: &str,
+        policy: WorkspacePolicy,
+        generation: u64,
     ) -> Result<Self, String> {
         let mut child = Command::new("codex")
             .args(["app-server", "--stdio"])
@@ -165,8 +169,15 @@ impl CodexProcess {
         let reader_pending = Arc::clone(&pending);
         let reader_app = app.clone();
         let reader_session_id = session_id.to_string();
+        let reader_policy = policy.clone();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
+                if !reader_policy.is_current(generation) {
+                    for (_, sender) in reader_pending.lock().unwrap().drain() {
+                        let _ = sender.send(Err("Workspace changed".to_string()));
+                    }
+                    break;
+                }
                 let Ok(line) = line else { break };
                 let Ok(value) = serde_json::from_str::<Value>(&line) else {
                     continue;
@@ -191,12 +202,18 @@ impl CodexProcess {
             let stopped = AgentEvent::Error {
                 message: "Codex app-server stopped".to_string(),
             };
-            let _ = reader_app.emit("agent-event", tag_event(&stopped, &reader_session_id));
+            if reader_policy.is_current(generation) {
+                let _ = reader_app.emit("agent-event", tag_event(&stopped, &reader_session_id));
+            }
         });
 
         let stderr_app = app;
+        let stderr_policy = policy;
         thread::spawn(move || {
             for line in BufReader::new(stderr).lines().flatten() {
+                if !stderr_policy.is_current(generation) {
+                    break;
+                }
                 if !line.trim().is_empty() {
                     let _ = stderr_app.emit("agent-log", line);
                 }

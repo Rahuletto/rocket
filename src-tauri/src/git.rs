@@ -1,8 +1,10 @@
 use gix::bstr::ByteSlice;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+
+use crate::workspace::WorkspacePolicy;
 
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +48,42 @@ fn git(workspace: &str, args: &[&str]) -> Result<Vec<u8>, String> {
         Ok(output.stdout)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
+fn guarded_workspace(policy: &WorkspacePolicy, workspace: &str) -> Result<String, String> {
+    let workspace = policy.require_root(Path::new(workspace))?;
+    let repo = gix::discover(&workspace).map_err(|_| "Workspace is not a Git repository")?;
+    let repository_root = repo
+        .workdir()
+        .ok_or("Bare Git repositories are not supported")?
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    if repository_root != workspace {
+        return Err("Git repository root must match the active workspace".to_string());
+    }
+    Ok(workspace.to_string_lossy().into_owned())
+}
+
+fn guarded_git_path(path: &str) -> Result<String, String> {
+    let relative = Path::new(path);
+    if path.trim().is_empty()
+        || relative.is_absolute()
+        || relative
+            .components()
+            .any(|part| matches!(part, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
+    {
+        return Err("Git path must be relative to the active workspace".to_string());
+    }
+    Ok(relative.to_string_lossy().into_owned())
+}
+
+fn commit_message(message: &str) -> Result<&str, String> {
+    let message = message.trim();
+    if message.is_empty() {
+        Err("Commit message required".to_string())
+    } else {
+        Ok(message)
     }
 }
 
@@ -121,12 +159,8 @@ fn collect_status(repo: &gix::Repository) -> Result<Vec<GitFileStatus>, String> 
 
 fn collect_refs(repo: &gix::Repository) -> Result<BTreeMap<String, Vec<String>>, String> {
     let mut refs = BTreeMap::<String, Vec<String>>::new();
-    let platform = repo
-        .references()
-        .map_err(|error| error.to_string())?;
-    let iter = platform
-        .all()
-        .map_err(|error| error.to_string())?;
+    let platform = repo.references().map_err(|error| error.to_string())?;
+    let iter = platform.all().map_err(|error| error.to_string())?;
 
     for reference in iter {
         let mut reference = match reference {
@@ -204,10 +238,14 @@ fn collect_commits(
 }
 
 #[tauri::command]
-pub fn git_snapshot(workspace: String) -> Result<GitSnapshot, String> {
-    if !Path::new(&workspace).is_dir() {
-        return Err("Workspace does not exist".to_string());
-    }
+pub fn git_snapshot(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+) -> Result<GitSnapshot, String> {
+    let workspace = policy
+        .require_root(Path::new(&workspace))?
+        .to_string_lossy()
+        .into_owned();
     let repo = match gix::discover(&workspace) {
         Ok(repo) => repo,
         Err(_) => {
@@ -221,6 +259,19 @@ pub fn git_snapshot(workspace: String) -> Result<GitSnapshot, String> {
             })
         }
     };
+    let repository_root = repo
+        .workdir()
+        .and_then(|path| path.canonicalize().ok());
+    if repository_root.as_ref() != Some(&PathBuf::from(&workspace)) {
+        return Ok(GitSnapshot {
+            ahead: 0,
+            behind: 0,
+            branch: String::new(),
+            commits: Vec::new(),
+            files: Vec::new(),
+            is_repository: false,
+        });
+    }
     let branch = repo
         .head_name()
         .map_err(|error| error.to_string())?
@@ -241,32 +292,56 @@ pub fn git_snapshot(workspace: String) -> Result<GitSnapshot, String> {
 }
 
 #[tauri::command]
-pub fn git_stage(workspace: String, paths: Vec<String>) -> Result<(), String> {
+pub fn git_stage(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    let workspace = guarded_workspace(&policy, &workspace)?;
+    let paths = paths
+        .iter()
+        .map(|path| guarded_git_path(path))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut args = vec!["add", "--"];
     args.extend(paths.iter().map(String::as_str));
     git(&workspace, &args).map(|_| ())
 }
 
 #[tauri::command]
-pub fn git_unstage(workspace: String, paths: Vec<String>) -> Result<(), String> {
+pub fn git_unstage(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    let workspace = guarded_workspace(&policy, &workspace)?;
+    let paths = paths
+        .iter()
+        .map(|path| guarded_git_path(path))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut args = vec!["restore", "--staged", "--"];
     args.extend(paths.iter().map(String::as_str));
     git(&workspace, &args).map(|_| ())
 }
 
 #[tauri::command]
-pub fn git_commit(workspace: String, message: String) -> Result<(), String> {
-    if message.trim().is_empty() {
-        return Err("Commit message required".to_string());
-    }
-    git(&workspace, &["commit", "-m", message.trim()]).map(|_| ())
+pub fn git_commit(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+    message: String,
+) -> Result<(), String> {
+    let workspace = guarded_workspace(&policy, &workspace)?;
+    git(&workspace, &["commit", "-m", commit_message(&message)?]).map(|_| ())
 }
 
 #[tauri::command]
-pub fn git_diff(workspace: String, path: String, cached: bool) -> Result<String, String> {
-    if path.trim().is_empty() {
-        return Err("Path required".to_string());
-    }
+pub fn git_diff(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+    path: String,
+    cached: bool,
+) -> Result<String, String> {
+    let workspace = guarded_workspace(&policy, &workspace)?;
+    let path = guarded_git_path(&path)?;
     let args = if cached {
         vec!["diff", "--cached", "--", path.as_str()]
     } else {
@@ -278,7 +353,11 @@ pub fn git_diff(workspace: String, path: String, cached: bool) -> Result<String,
     }
 
     let absolute = Path::new(&workspace).join(&path);
-    if absolute.is_file() {
+    if absolute.exists() {
+        let absolute = policy.existing_path(&absolute)?;
+        if !absolute.is_file() {
+            return Ok(String::new());
+        }
         let output = Command::new("git")
             .arg("-C")
             .arg(&workspace)
@@ -296,13 +375,25 @@ pub fn git_diff(workspace: String, path: String, cached: bool) -> Result<String,
 }
 
 #[tauri::command]
-pub fn git_show(workspace: String, hash: String) -> Result<String, String> {
+pub fn git_show(
+    policy: tauri::State<WorkspacePolicy>,
+    workspace: String,
+    hash: String,
+) -> Result<String, String> {
+    let workspace = guarded_workspace(&policy, &workspace)?;
     if hash.len() < 7 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("Invalid commit hash".to_string());
     }
     git(
         &workspace,
-        &["show", "--format=", "--patch", "--find-renames", &hash, "--"],
+        &[
+            "show",
+            "--format=",
+            "--patch",
+            "--find-renames",
+            &hash,
+            "--",
+        ],
     )
     .map(|patch| String::from_utf8_lossy(&patch).into_owned())
 }
@@ -320,8 +411,18 @@ mod tests {
     #[test]
     fn rejects_empty_commit_messages() {
         assert_eq!(
-            git_commit(".".to_string(), "  ".to_string()).unwrap_err(),
+            commit_message("  ").unwrap_err(),
             "Commit message required"
         );
+    }
+
+    #[test]
+    fn accepts_deleted_paths_without_existing_parents() {
+        assert_eq!(
+            guarded_git_path("deleted-dir/tracked-file.ts").unwrap(),
+            "deleted-dir/tracked-file.ts"
+        );
+        assert!(guarded_git_path("../outside.ts").is_err());
+        assert!(guarded_git_path("/outside.ts").is_err());
     }
 }

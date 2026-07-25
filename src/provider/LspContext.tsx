@@ -13,7 +13,7 @@ export function LspProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState(initialStatus);
   const [logs, setLogs] = useState<string[]>([]);
   const { projectName } = useSource();
-  const root = projectName || localStorage.getItem("project");
+  const root = projectName;
   const start = async (restart = false) => {
     if (!root) return;
     try { setStatus(await invoke(restart ? "lsp_restart" : "lsp_start", { rootPath: root })); }

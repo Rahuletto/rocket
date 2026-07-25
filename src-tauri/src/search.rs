@@ -8,11 +8,29 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter};
 
+use crate::workspace::WorkspacePolicy;
+
 const RESULT_LIMIT: usize = 5_000;
 
 #[derive(Default)]
 pub struct SearchManager {
     processes: Arc<Mutex<HashMap<String, Arc<Mutex<Child>>>>>,
+}
+
+impl SearchManager {
+    pub fn cancel_all(&self) -> Result<(), String> {
+        let mut processes = self
+            .processes
+            .lock()
+            .map_err(|_| "Search state poisoned")?;
+        for process in processes.values() {
+            if let Ok(mut process) = process.lock() {
+                let _ = process.kill();
+            }
+        }
+        processes.clear();
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +102,7 @@ struct SearchFinished {
 pub fn search_workspace(
     app: AppHandle,
     manager: tauri::State<SearchManager>,
+    policy: tauri::State<WorkspacePolicy>,
     request: WorkspaceSearchRequest,
 ) -> Result<(), String> {
     if request.id.trim().is_empty() {
@@ -96,12 +115,9 @@ pub fn search_workspace(
     if query.len() > 1_024 {
         return Err("Search query exceeds 1024 byte limit".to_string());
     }
-    let workspace = PathBuf::from(&request.workspace)
-        .canonicalize()
-        .map_err(|error| format!("Invalid search workspace: {error}"))?;
-    if !workspace.is_dir() {
-        return Err("Search workspace is not a directory".to_string());
-    }
+    let (workspace, generation) =
+        policy.require_root_with_generation(PathBuf::from(&request.workspace).as_path())?;
+    let search_policy = policy.inner().clone();
 
     let mut command = Command::new("rg");
     command.args([
@@ -134,11 +150,16 @@ pub fn search_workspace(
     let stdout = child.stdout.take().ok_or("ripgrep stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("ripgrep stderr unavailable")?;
     let child = Arc::new(Mutex::new(child));
-    manager
+    let mut processes = manager
         .processes
         .lock()
-        .map_err(|_| "Search state poisoned")?
-        .insert(request.id.clone(), Arc::clone(&child));
+        .map_err(|_| "Search state poisoned")?;
+    if !search_policy.is_current(generation) {
+        let _ = child.lock().map(|mut process| process.kill());
+        return Err("Workspace changed while starting search".to_string());
+    }
+    processes.insert(request.id.clone(), Arc::clone(&child));
+    drop(processes);
 
     let processes = Arc::clone(&manager.processes);
     let id = request.id;
@@ -150,6 +171,12 @@ pub fn search_workspace(
                 continue;
             };
             for search_match in parse_match(&id, &value) {
+                if !search_policy.is_current(generation) {
+                    if let Ok(mut process) = child.lock() {
+                        let _ = process.kill();
+                    }
+                    break;
+                }
                 if count >= RESULT_LIMIT {
                     limited = true;
                     if let Ok(mut process) = child.lock() {
@@ -179,15 +206,17 @@ pub fn search_workspace(
             _ if stderr_text.trim().is_empty() => Some("Workspace search stopped".to_string()),
             _ => Some(stderr_text.trim().to_string()),
         };
-        let _ = app.emit(
-            "workspace-search-finished",
-            SearchFinished {
-                id,
-                count,
-                limited,
-                error,
-            },
-        );
+        if search_policy.is_current(generation) {
+            let _ = app.emit(
+                "workspace-search-finished",
+                SearchFinished {
+                    id,
+                    count,
+                    limited,
+                    error,
+                },
+            );
+        }
     });
     Ok(())
 }

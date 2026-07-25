@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+
+use crate::workspace::WorkspacePolicy;
 use url::Url;
 
 type Pending = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
@@ -28,6 +30,16 @@ pub struct LspManager {
     process: Mutex<Option<LspProcess>>,
 }
 
+impl LspManager {
+    pub fn shutdown(&self) -> Result<(), String> {
+        let mut active = self.process.lock().map_err(|_| "LSP state poisoned")?;
+        if let Some(mut process) = active.take() {
+            process.shutdown();
+        }
+        Ok(())
+    }
+}
+
 impl Default for LspManager {
     fn default() -> Self {
         Self {
@@ -39,6 +51,7 @@ impl Default for LspManager {
 struct LspProcess {
     child: Child,
     command: String,
+    generation: u64,
     root: PathBuf,
     stdin: Arc<Mutex<ChildStdin>>,
     pending: Pending,
@@ -153,7 +166,12 @@ fn emit_status(app: &AppHandle, status: &LspStatus) {
 }
 
 impl LspProcess {
-    fn start(app: AppHandle, root: &Path) -> Result<Self, String> {
+    fn start(
+        app: AppHandle,
+        root: &Path,
+        policy: WorkspacePolicy,
+        generation: u64,
+    ) -> Result<Self, String> {
         let root = root
             .canonicalize()
             .map_err(|error| format!("Invalid LSP workspace: {error}"))?;
@@ -211,11 +229,15 @@ impl LspProcess {
         let reader_pending = Arc::clone(&pending);
         let reader_app = app.clone();
         let reader_root = root.clone();
+        let reader_policy = policy.clone();
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
                 match read_message(&mut reader) {
                     Ok(Some(value)) => {
+                        if !reader_policy.is_current(generation) {
+                            break;
+                        }
                         if let Some(id) = value.get("id").and_then(Value::as_u64) {
                             if let Some(sender) = reader_pending.lock().unwrap().remove(&id) {
                                 let result = if let Some(error) = value.get("error") {
@@ -244,26 +266,34 @@ impl LspProcess {
                     }
                     Ok(None) => break,
                     Err(error) => {
-                        let _ = reader_app.emit("lsp-log", error);
+                        if reader_policy.is_current(generation) {
+                            let _ = reader_app.emit("lsp-log", error);
+                        }
                         break;
                     }
                 }
             }
-            let _ = reader_app.emit(
-                "lsp-status",
-                LspStatus {
-                    language: "typescript-javascript",
-                    state: "stopped",
-                    command: command_label,
-                    message: "Language server stopped".to_string(),
-                    capabilities: None,
-                },
-            );
+            if reader_policy.is_current(generation) {
+                let _ = reader_app.emit(
+                    "lsp-status",
+                    LspStatus {
+                        language: "typescript-javascript",
+                        state: "stopped",
+                        command: command_label,
+                        message: "Language server stopped".to_string(),
+                        capabilities: None,
+                    },
+                );
+            }
         });
 
         let stderr_app = app;
+        let stderr_policy = policy;
         thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                if !stderr_policy.is_current(generation) {
+                    break;
+                }
                 if !line.trim().is_empty() {
                     let _ = stderr_app.emit("lsp-log", line);
                 }
@@ -273,6 +303,7 @@ impl LspProcess {
         let mut process = Self {
             child,
             command: executable.display().to_string(),
+            generation,
             root,
             stdin,
             pending,
@@ -363,6 +394,8 @@ impl Drop for LspProcess {
 fn start_process(
     app: AppHandle,
     manager: tauri::State<LspManager>,
+    policy: WorkspacePolicy,
+    generation: u64,
     root_path: String,
 ) -> Result<LspStatus, String> {
     let root = PathBuf::from(root_path);
@@ -373,10 +406,20 @@ fn start_process(
         message: "Starting TypeScript language server".to_string(),
         capabilities: None,
     };
-    emit_status(&app, &starting);
-    let process = LspProcess::start(app.clone(), &root)?;
+    if policy.is_current(generation) {
+        emit_status(&app, &starting);
+    }
+    let mut process = LspProcess::start(app.clone(), &root, policy.clone(), generation)?;
+    if !policy.is_current(generation) {
+        process.shutdown();
+        return Err("Workspace changed while starting the language server".to_string());
+    }
     let status = process.status();
     let mut active = manager.process.lock().map_err(|_| "LSP state poisoned")?;
+    if !policy.is_current(generation) {
+        process.shutdown();
+        return Err("Workspace changed while registering the language server".to_string());
+    }
     if let Some(mut previous) = active.take() {
         previous.shutdown();
     }
@@ -389,51 +432,58 @@ fn start_process(
 pub fn lsp_start(
     app: AppHandle,
     manager: tauri::State<LspManager>,
+    policy: tauri::State<WorkspacePolicy>,
     root_path: String,
 ) -> Result<LspStatus, String> {
-    start_process(app, manager, root_path)
+    let (root_path, generation) = policy.require_root_with_generation(Path::new(&root_path))?;
+    let root_path = root_path.to_string_lossy().into_owned();
+    start_process(app, manager, policy.inner().clone(), generation, root_path)
 }
 
 #[tauri::command]
 pub fn lsp_restart(
     app: AppHandle,
     manager: tauri::State<LspManager>,
+    policy: tauri::State<WorkspacePolicy>,
     root_path: String,
 ) -> Result<LspStatus, String> {
+    let (root_path, generation) = policy.require_root_with_generation(Path::new(&root_path))?;
+    let root_path = root_path.to_string_lossy().into_owned();
     {
         let mut active = manager.process.lock().map_err(|_| "LSP state poisoned")?;
         if let Some(mut process) = active.take() {
             process.shutdown();
         }
     }
-    start_process(app, manager, root_path)
+    start_process(app, manager, policy.inner().clone(), generation, root_path)
 }
 
 #[tauri::command]
 pub fn lsp_stop(manager: tauri::State<LspManager>) -> Result<(), String> {
-    let mut active = manager.process.lock().map_err(|_| "LSP state poisoned")?;
-    if let Some(mut process) = active.take() {
-        process.shutdown();
-    }
-    Ok(())
+    manager.shutdown()
 }
 
 #[tauri::command]
 pub fn lsp_request(
     manager: tauri::State<LspManager>,
+    policy: tauri::State<WorkspacePolicy>,
     method: String,
     params: Value,
 ) -> Result<Value, String> {
     let active = manager.process.lock().map_err(|_| "LSP state poisoned")?;
-    active
+    let process = active
         .as_ref()
-        .ok_or("Language server is not running".to_string())?
-        .request(&method, params)
+        .ok_or("Language server is not running".to_string())?;
+    if !policy.is_current(process.generation) {
+        return Err("Language server belongs to a previous workspace".to_string());
+    }
+    process.request(&method, params)
 }
 
 #[tauri::command]
 pub fn lsp_document_event(
     manager: tauri::State<LspManager>,
+    policy: tauri::State<WorkspacePolicy>,
     kind: String,
     path: String,
     language_id: Option<String>,
@@ -444,6 +494,9 @@ pub fn lsp_document_event(
     let process = active
         .as_ref()
         .ok_or("Language server is not running".to_string())?;
+    if !policy.is_current(process.generation) {
+        return Err("Language server belongs to a previous workspace".to_string());
+    }
     let uri = document_uri(&process.root, Path::new(&path))?;
     match kind.as_str() {
         "Open" => process.notify(

@@ -27,8 +27,8 @@ export default function Sidebar() {
     }
     localStorage.removeItem("directories");
     localStorage.setItem("project", selectedPath);
-    setProjectName(selectedPath);
     await watch(`${selectedPath}/`);
+    setProjectName(selectedPath);
     await readAndSet(`${selectedPath}/`, setFiles);
     window.dispatchEvent(new Event("rocket-workspace-changed"));
   };
@@ -37,8 +37,13 @@ export default function Sidebar() {
   useEffect(() => {
     const project = localStorage.getItem("project");
     if (project) {
-      setProjectName(project);
-      watch(`${project}/`).then(() => readAndSet(`${project}/`, setFiles)).catch(console.error);
+      watch(`${project}/`)
+        .then(() => {
+          setProjectName(project);
+          return readAndSet(`${project}/`, setFiles);
+        })
+        .then(() => window.dispatchEvent(new Event("rocket-workspace-changed")))
+        .catch(console.error);
     }
 
     const watchChange = listen("file-changed", () => {

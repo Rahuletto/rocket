@@ -6,8 +6,11 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::workspace::WorkspacePolicy;
+
 struct TerminalSession {
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    generation: u64,
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
 }
@@ -15,6 +18,20 @@ struct TerminalSession {
 #[derive(Default)]
 pub struct TerminalManager {
     sessions: Mutex<HashMap<String, TerminalSession>>,
+}
+
+impl TerminalManager {
+    pub fn shutdown_all(&self) -> Result<(), String> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "Terminal state poisoned")?;
+        for session in sessions.values_mut() {
+            let _ = session.child.kill();
+        }
+        sessions.clear();
+        Ok(())
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -28,6 +45,7 @@ struct TerminalOutput {
 pub fn terminal_create(
     app: AppHandle,
     manager: State<TerminalManager>,
+    policy: State<WorkspacePolicy>,
     terminal_id: String,
     workspace: String,
     cols: u16,
@@ -44,6 +62,9 @@ pub fn terminal_create(
     {
         return Err("Terminal session already exists".to_string());
     }
+    let (workspace, generation) =
+        policy.require_root_with_generation(std::path::Path::new(&workspace))?;
+    let output_policy = policy.inner().clone();
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -54,10 +75,10 @@ pub fn terminal_create(
         })
         .map_err(|error| error.to_string())?;
     let mut command = CommandBuilder::new_default_prog();
-    command.cwd(&workspace);
+    command.cwd(workspace);
     command.env("TERM", "xterm-256color");
 
-    let child = pair
+    let mut child = pair
         .slave
         .spawn_command(command)
         .map_err(|error| error.to_string())?;
@@ -71,18 +92,24 @@ pub fn terminal_create(
         .map_err(|error| error.to_string())?;
     let event_id = terminal_id.clone();
 
-    manager
+    let mut sessions = manager
         .sessions
         .lock()
-        .map_err(|_| "Terminal state poisoned")?
-        .insert(
-            terminal_id.clone(),
-            TerminalSession {
-                child,
-                master: pair.master,
-                writer,
-            },
-        );
+        .map_err(|_| "Terminal state poisoned")?;
+    if !output_policy.is_current(generation) {
+        let _ = child.kill();
+        return Err("Workspace changed while starting the terminal".to_string());
+    }
+    sessions.insert(
+        terminal_id.clone(),
+        TerminalSession {
+            child,
+            generation,
+            master: pair.master,
+            writer,
+        },
+    );
+    drop(sessions);
 
     thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
@@ -90,6 +117,9 @@ pub fn terminal_create(
             match reader.read(&mut buffer) {
                 Ok(0) | Err(_) => break,
                 Ok(read) => {
+                    if !output_policy.is_current(generation) {
+                        break;
+                    }
                     let _ = app.emit(
                         "terminal-output",
                         TerminalOutput {
@@ -100,7 +130,9 @@ pub fn terminal_create(
                 }
             }
         }
-        let _ = app.emit("terminal-exited", event_id);
+        if output_policy.is_current(generation) {
+            let _ = app.emit("terminal-exited", event_id);
+        }
     });
 
     Ok(terminal_id)
@@ -109,6 +141,7 @@ pub fn terminal_create(
 #[tauri::command]
 pub fn terminal_write(
     manager: State<TerminalManager>,
+    policy: State<WorkspacePolicy>,
     terminal_id: String,
     data: String,
 ) -> Result<(), String> {
@@ -119,6 +152,9 @@ pub fn terminal_write(
     let session = sessions
         .get_mut(&terminal_id)
         .ok_or("Terminal session not found")?;
+    if !policy.is_current(session.generation) {
+        return Err("Terminal belongs to a previous workspace".to_string());
+    }
     session
         .writer
         .write_all(data.as_bytes())
@@ -129,6 +165,7 @@ pub fn terminal_write(
 #[tauri::command]
 pub fn terminal_resize(
     manager: State<TerminalManager>,
+    policy: State<WorkspacePolicy>,
     terminal_id: String,
     cols: u16,
     rows: u16,
@@ -140,6 +177,9 @@ pub fn terminal_resize(
     let session = sessions
         .get(&terminal_id)
         .ok_or("Terminal session not found")?;
+    if !policy.is_current(session.generation) {
+        return Err("Terminal belongs to a previous workspace".to_string());
+    }
     session
         .master
         .resize(PtySize {

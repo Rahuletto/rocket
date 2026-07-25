@@ -14,56 +14,95 @@ mod lsp;
 mod menu;
 mod search;
 mod terminal;
-
-#[derive(Default)]
-struct WorkspaceState(Mutex<Option<PathBuf>>);
+mod workspace;
 
 #[derive(Default)]
 struct WatcherState(Mutex<Option<RecommendedWatcher>>);
 
 #[tauri::command]
-fn open(folder_path: &str) -> Result<Vec<fs::FileStruct>, String> {
-    fs::read_directory(folder_path)
+fn open(
+    folder_path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<Vec<fs::FileStruct>, String> {
+    let path = workspace.existing_path(PathBuf::from(folder_path).as_path())?;
+    fs::read_directory(path.to_str().ok_or("Workspace path is not valid UTF-8")?)
 }
 
 #[tauri::command]
-fn get_contents(dir_path: &str) -> Result<String, String> {
-    fs::read_file(dir_path)
+fn get_contents(
+    dir_path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<String, String> {
+    let path = workspace.existing_path(PathBuf::from(dir_path).as_path())?;
+    fs::read_file(path.to_str().ok_or("File path is not valid UTF-8")?)
 }
 
 #[tauri::command]
-fn write(dir_path: &str, content: &str) -> Result<(), String> {
-    fs::write_file(dir_path, content)
+fn write(
+    dir_path: &str,
+    content: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<(), String> {
+    let path = workspace.writable_path(PathBuf::from(dir_path).as_path())?;
+    fs::write_file(
+        path.to_str().ok_or("File path is not valid UTF-8")?,
+        content,
+    )
 }
 
 #[tauri::command]
-fn delete_file(dir_path: &str) -> Result<(), String> {
-    fs::remove_file(dir_path)
+fn delete_file(
+    dir_path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<(), String> {
+    let path = workspace.removal_path(PathBuf::from(dir_path).as_path())?;
+    fs::remove_file(path.to_str().ok_or("File path is not valid UTF-8")?)
 }
 
 #[tauri::command]
-fn delete_folder(dir_path: &str) -> Result<(), String> {
-    fs::remove_folder(dir_path)
+fn delete_folder(
+    dir_path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<(), String> {
+    let path = workspace.removal_path(PathBuf::from(dir_path).as_path())?;
+    if path == workspace.root()? {
+        return Err("Cannot delete the active workspace".to_string());
+    }
+    fs::remove_folder(path.to_str().ok_or("Folder path is not valid UTF-8")?)
 }
 
 #[tauri::command]
-fn create_folder(dir_path: &str) -> Result<(), String> {
-    fs::create_folder(dir_path)
+fn create_folder(
+    dir_path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<(), String> {
+    let path = workspace.writable_path(PathBuf::from(dir_path).as_path())?;
+    fs::create_folder(path.to_str().ok_or("Folder path is not valid UTF-8")?)
 }
 
 #[tauri::command]
-fn reveal_in_file_manager(path: &str) -> Result<(), String> {
-    fs::reveal_in_file_manager(path)
+fn reveal_in_file_manager(
+    path: &str,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
+) -> Result<(), String> {
+    let path = workspace.existing_path(PathBuf::from(path).as_path())?;
+    fs::reveal_in_file_manager(path.to_str().ok_or("Path is not valid UTF-8")?)
 }
 
 #[tauri::command]
 fn watch_changes(
     dir_path: String,
     app_handle: AppHandle,
-    workspace: tauri::State<WorkspaceState>,
+    workspace: tauri::State<workspace::WorkspacePolicy>,
     watcher_state: tauri::State<WatcherState>,
+    agents: tauri::State<agent::AgentManager>,
+    terminals: tauri::State<terminal::TerminalManager>,
+    language_server: tauri::State<lsp::LspManager>,
+    searches: tauri::State<search::SearchManager>,
 ) -> Result<(), String> {
-    let path = PathBuf::from(&dir_path);
+    let path = PathBuf::from(&dir_path)
+        .canonicalize()
+        .map_err(|error| format!("Workspace does not exist: {error}"))?;
     if !path.is_dir() {
         return Err(format!("Workspace does not exist: {dir_path}"));
     }
@@ -82,7 +121,14 @@ fn watch_changes(
         .watch(&path, RecursiveMode::Recursive)
         .map_err(|error| error.to_string())?;
 
-    *workspace.0.lock().map_err(|_| "Workspace state poisoned")? = Some(path);
+    let changed = workspace.root().is_ok_and(|root| root != path);
+    workspace.set_root(&path)?;
+    if changed {
+        agents.shutdown_all()?;
+        terminals.shutdown_all()?;
+        language_server.shutdown()?;
+        searches.cancel_all()?;
+    }
     *watcher_state
         .0
         .lock()
@@ -121,7 +167,7 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .manage(agent::AgentManager::default())
-        .manage(WorkspaceState::default())
+        .manage(workspace::WorkspacePolicy::default())
         .manage(WatcherState::default())
         .manage(terminal::TerminalManager::default())
         .manage(lsp::LspManager::default())

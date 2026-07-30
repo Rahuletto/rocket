@@ -154,4 +154,25 @@ describe("editor context store", () => {
 
     expect(flushes).toBe(1);
   });
+
+  it("propagates an active editor save failure", async () => {
+    setEditorFlush("failing-editor", async () => {
+      throw new Error("disk full");
+    });
+
+    await expect(flushEditorContext()).rejects.toThrow("disk full");
+    setEditorFlush("failing-editor", null);
+  });
+
+  it("flushes every registered editor", async () => {
+    const flushed: string[] = [];
+    setEditorFlush("first", async () => { flushed.push("first"); });
+    setEditorFlush("second", async () => { flushed.push("second"); });
+
+    await flushEditorContext();
+
+    expect(flushed.sort()).toEqual(["first", "second"]);
+    setEditorFlush("first", null);
+    setEditorFlush("second", null);
+  });
 });

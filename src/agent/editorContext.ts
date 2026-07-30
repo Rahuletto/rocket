@@ -38,7 +38,7 @@ const normalizePath = (value: string) =>
 
 let currentEditorContext: EditorContextSnapshot | null = null;
 const editorContextListeners = new Set<() => void>();
-let editorFlush: { owner: string; run: () => Promise<void> } | null = null;
+const editorFlushes = new Map<string, () => Promise<void>>();
 
 export function getEditorContext(): EditorContextSnapshot | null {
   return currentEditorContext;
@@ -59,14 +59,14 @@ export function setEditorFlush(
   flush: (() => Promise<void>) | null,
 ): void {
   if (flush) {
-    editorFlush = { owner, run: flush };
-  } else if (editorFlush?.owner === owner) {
-    editorFlush = null;
+    editorFlushes.set(owner, flush);
+  } else {
+    editorFlushes.delete(owner);
   }
 }
 
 export async function flushEditorContext(): Promise<void> {
-  await editorFlush?.run();
+  await Promise.all([...editorFlushes.values()].map((flush) => flush()));
 }
 
 export function buildAgentPrompt(

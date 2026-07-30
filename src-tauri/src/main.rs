@@ -100,12 +100,11 @@ fn watch_changes(
     language_server: tauri::State<lsp::LspManager>,
     searches: tauri::State<search::SearchManager>,
 ) -> Result<(), String> {
-    let path = PathBuf::from(&dir_path)
-        .canonicalize()
-        .map_err(|error| format!("Workspace does not exist: {error}"))?;
-    if !path.is_dir() {
-        return Err(format!("Workspace does not exist: {dir_path}"));
-    }
+    let mut watcher_slot = watcher_state
+        .0
+        .lock()
+        .map_err(|_| "Watcher state poisoned")?;
+    let path = workspace.validate_root(PathBuf::from(&dir_path).as_path())?;
 
     let event_app = app_handle;
     let mut watcher = RecommendedWatcher::new(
@@ -123,16 +122,13 @@ fn watch_changes(
 
     let changed = workspace.root().is_ok_and(|root| root != path);
     workspace.set_root(&path)?;
+    *watcher_slot = Some(watcher);
     if changed {
         agents.shutdown_all()?;
         terminals.shutdown_all()?;
         language_server.shutdown()?;
         searches.cancel_all()?;
     }
-    *watcher_state
-        .0
-        .lock()
-        .map_err(|_| "Watcher state poisoned")? = Some(watcher);
     Ok(())
 }
 fn main() {
@@ -198,6 +194,9 @@ fn main() {
             "toggle_agent" => {
                 let _ = app.emit("toggle_agent", ());
             }
+            "save" => {
+                let _ = app.emit("save", ());
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
@@ -218,6 +217,12 @@ fn main() {
             agent::agent_interrupt,
             agent::agent_respond_approval,
             agent::agent_end_session,
+            agent::agent_attribute_path,
+            agent::agent_user_edited_path,
+            agent::agent_reconcile_changes,
+            agent::agent_review_changes,
+            agent::agent_keep_changes,
+            agent::agent_revert_changes,
             agent::agent_list_files,
             agent::agent_list_skills,
             agent::profiles::agent_profiles,
@@ -226,6 +231,13 @@ fn main() {
             agent::storage::agent_save_config,
             agent::storage::agent_save_provider_connection,
             agent::storage::agent_provider_statuses,
+            agent::store::agent_load_sessions,
+            agent::store::agent_persist_session,
+            agent::store::agent_delete_session,
+            agent::store::agent_create_checkpoint,
+            agent::store::agent_list_checkpoints,
+            agent::store::agent_restore_checkpoint,
+            agent::store::agent_delete_checkpoint,
             lsp::lsp_start,
             lsp::lsp_restart,
             lsp::lsp_stop,

@@ -12,7 +12,7 @@ import {
   type ModelInfo,
   type ProviderDef,
   type ProviderId,
-  allModels,
+  availableModels,
 } from "../../agent/providers/catalog";
 import {
   loadProviderStatuses,
@@ -71,8 +71,8 @@ export default function ModelPicker({
 
   const filteredModels = useMemo(() => {
     const q = query.toLowerCase().trim();
-    if (!q) return allModels();
-    return allModels().filter(
+    if (!q) return availableModels();
+    return availableModels().filter(
       (model) =>
         model.id.toLowerCase().includes(q) ||
         model.displayName.toLowerCase().includes(q) ||
@@ -314,9 +314,8 @@ export default function ModelPicker({
                 {models.map((model) => {
                   runningIndex += 1;
                   const flatIndex = runningIndex;
-                  const runtimeAvailable = model.engine === "codex";
                   const isActive = model.id === modelId;
-                  const selectable = connected && runtimeAvailable;
+                  const selectable = connected;
                   const focused = flatIndex === focusedIndex;
                   return (
                     <button
@@ -330,17 +329,12 @@ export default function ModelPicker({
                       title={
                         !connected
                           ? `Connect to ${provider.name} to use this model`
-                          : runtimeAvailable
-                            ? `Use ${model.displayName}`
-                            : "This model isn't available yet"
+                          : `Use ${model.displayName}`
                       }
                       type="button"
                     >
                       <span className="agent-model-row-main">
                         <span className="agent-model-name">{model.displayName}</span>
-                        {!runtimeAvailable && (
-                          <span className="agent-model-soon">Soon</span>
-                        )}
                       </span>
                       <span className="agent-model-row-trail">
                         {!connected && (

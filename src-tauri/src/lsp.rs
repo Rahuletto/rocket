@@ -135,6 +135,46 @@ fn notification_is_confined(root: &Path, params: &Value) -> bool {
     canonicalize_confined(root, &path).is_ok()
 }
 
+fn uri_is_confined(root: &Path, uri: &str) -> bool {
+    Url::parse(uri)
+        .ok()
+        .and_then(|url| url.to_file_path().ok())
+        .is_some_and(|path| canonicalize_confined(root, &path).is_ok())
+}
+
+fn request_is_confined(root: &Path, method: &str, params: &Value) -> bool {
+    if method == "workspace/symbol" {
+        return true;
+    }
+    params
+        .pointer("/textDocument/uri")
+        .and_then(Value::as_str)
+        .is_some_and(|uri| uri_is_confined(root, uri))
+}
+
+fn workspace_edits_are_confined(root: &Path, value: &Value) -> bool {
+    match value {
+        Value::Array(values) => values
+            .iter()
+            .all(|value| workspace_edits_are_confined(root, value)),
+        Value::Object(values) => values.iter().all(|(key, value)| {
+            if matches!(key.as_str(), "uri" | "oldUri" | "newUri") {
+                return value.as_str().is_some_and(|uri| uri_is_confined(root, uri));
+            }
+            if key == "changes" {
+                let Some(changes) = value.as_object() else {
+                    return false;
+                };
+                if !changes.keys().all(|uri| uri_is_confined(root, uri)) {
+                    return false;
+                }
+            }
+            workspace_edits_are_confined(root, value)
+        }),
+        _ => true,
+    }
+}
+
 fn language_server_command(root: &Path) -> (PathBuf, String) {
     let workspace_binary = root
         .join("node_modules")
@@ -477,7 +517,31 @@ pub fn lsp_request(
     if !policy.is_current(process.generation) {
         return Err("Language server belongs to a previous workspace".to_string());
     }
-    process.request(&method, params)
+    const ALLOWED_METHODS: &[&str] = &[
+        "textDocument/codeAction",
+        "textDocument/completion",
+        "textDocument/definition",
+        "textDocument/formatting",
+        "textDocument/hover",
+        "textDocument/references",
+        "textDocument/rename",
+        "workspace/symbol",
+    ];
+    if !ALLOWED_METHODS.contains(&method.as_str()) {
+        return Err(format!("Unsupported LSP request: {method}"));
+    }
+    if !request_is_confined(&process.root, &method, &params) {
+        return Err("LSP request is outside the open workspace".to_string());
+    }
+    let response = process.request(&method, params)?;
+    if matches!(
+        method.as_str(),
+        "textDocument/codeAction" | "textDocument/rename"
+    ) && !workspace_edits_are_confined(&process.root, &response)
+    {
+        return Err("Language server returned edits outside the open workspace".to_string());
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -553,5 +617,39 @@ mod tests {
 
         assert!(inside.starts_with(&root));
         assert!(outside.is_err());
+    }
+
+    #[test]
+    fn confines_lsp_requests_and_workspace_edits() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .canonicalize()
+            .unwrap();
+        let inside = Url::from_file_path(root.join("src/main.rs"))
+            .unwrap()
+            .to_string();
+        let outside_path = root.parent().unwrap().join("package.json");
+        let outside = Url::from_file_path(outside_path).unwrap().to_string();
+        let mut edits = json!({ "changes": {} });
+        edits["changes"]
+            .as_object_mut()
+            .unwrap()
+            .insert(outside.clone(), json!([]));
+
+        assert!(request_is_confined(
+            &root,
+            "textDocument/hover",
+            &json!({ "textDocument": { "uri": inside } })
+        ));
+        assert!(!request_is_confined(
+            &root,
+            "textDocument/hover",
+            &json!({ "textDocument": { "uri": outside } })
+        ));
+        assert!(request_is_confined(
+            &root,
+            "workspace/symbol",
+            &json!({ "query": "Rocket" })
+        ));
+        assert!(!workspace_edits_are_confined(&root, &edits));
     }
 }

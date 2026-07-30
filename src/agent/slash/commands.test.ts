@@ -4,7 +4,6 @@ import {
   HELP_TEXT,
   parseSlashInput,
   SLASH_COMMANDS,
-  TOOLS_HELP,
   validateSlashInput,
 } from "./commands";
 
@@ -45,7 +44,7 @@ describe("slash command registry", () => {
     expect(names).not.toContain("subagents");
     expect(names).not.toContain("plan");
     expect(names).not.toContain("connect");
-    expect(TOOLS_HELP).not.toContain("coming online");
+    expect(names).not.toContain("tools");
   });
 
   it("rejects arguments for commands that take none", () => {

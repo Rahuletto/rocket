@@ -12,8 +12,12 @@ struct WorkspaceAccess {
 pub struct WorkspacePolicy(Arc<Mutex<WorkspaceAccess>>);
 
 impl WorkspacePolicy {
+    pub fn validate_root(&self, path: &Path) -> Result<PathBuf, String> {
+        canonical_directory(path, "Workspace")
+    }
+
     pub fn set_root(&self, path: &Path) -> Result<PathBuf, String> {
-        let root = canonical_directory(path, "Workspace")?;
+        let root = self.validate_root(path)?;
         let mut access = self.0.lock().map_err(|_| "Workspace state poisoned")?;
         if access.root.as_ref() != Some(&root) {
             access.root = Some(root.clone());
@@ -23,7 +27,8 @@ impl WorkspacePolicy {
     }
 
     pub fn require_root(&self, path: &Path) -> Result<PathBuf, String> {
-        self.require_root_with_generation(path).map(|(root, _)| root)
+        self.require_root_with_generation(path)
+            .map(|(root, _)| root)
     }
 
     pub fn require_root_with_generation(&self, path: &Path) -> Result<(PathBuf, u64), String> {
@@ -123,6 +128,22 @@ mod tests {
         assert_eq!(policy.existing_path(&existing).unwrap(), existing);
         assert_eq!(policy.writable_path(&new_file).unwrap(), new_file);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn validating_a_root_does_not_change_the_active_workspace() {
+        let first = temp_workspace();
+        let second = temp_workspace();
+        let policy = WorkspacePolicy::default();
+        let active = policy.set_root(&first).unwrap();
+
+        assert_eq!(
+            policy.validate_root(&second).unwrap(),
+            fs::canonicalize(&second).unwrap()
+        );
+        assert_eq!(policy.root().unwrap(), active);
+        fs::remove_dir_all(first).unwrap();
+        fs::remove_dir_all(second).unwrap();
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
 import { getFileObject } from "../stores/file";
 import { readFile, writeFile } from "../helpers/filesys";
@@ -51,7 +51,9 @@ export default function CodeEditor({ id, active, language }: Props) {
   const model = findModel(modelId);
   const modelLabel = model?.displayName ?? "Codex";
   const [code, setCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [savedCode, setSavedCode] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [theme, setTheme] = useState("dark");
   const [editorInstance, setEditorInstance] = useState<any>(null);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
@@ -63,6 +65,9 @@ export default function CodeEditor({ id, active, language }: Props) {
   const [inlinePickerOpen, setInlinePickerOpen] = useState(false);
   const inlineInputRef = useRef<HTMLTextAreaElement>(null);
   const onTriggerInlineChatRef = useRef<() => void>(() => {});
+  const saveTailRef = useRef<Promise<void>>(Promise.resolve());
+  const dirtyRef = useRef(false);
+  dirtyRef.current = code !== savedCode;
 
   const revealSearchLocation = () => {
     if (!editorInstance) return;
@@ -174,16 +179,24 @@ export default function CodeEditor({ id, active, language }: Props) {
     [language],
   );
 
-  const updateEditorContent = async (id: string) => {
+  const updateEditorContent = async (id: string, preserveDirty = false) => {
     const file = getFileObject(id);
     if (!file) return;
 
-    setError(null);
+    if (preserveDirty && dirtyRef.current) {
+      setOperationError("The file changed on disk, but this editor has unsaved changes. Save or discard them before reloading.");
+      return;
+    }
+    setLoadError(null);
+    setOperationError(null);
     try {
-      setCode(await readFile(file.path));
+      const content = await readFile(file.path);
+      setCode(content);
+      setSavedCode(content);
     } catch (readError) {
       setCode(null);
-      setError(String(readError));
+      setSavedCode(null);
+      setLoadError(String(readError));
     }
   };
 
@@ -194,33 +207,45 @@ export default function CodeEditor({ id, active, language }: Props) {
       const workspace = localStorage.getItem("project") ?? "";
       if (!changedPath || !file || file.kind !== "file") return;
       if (!matchesChangedPath(file.path, changedPath, workspace)) return;
-      window.setTimeout(() => void updateEditorContent(id), 50);
+      window.setTimeout(() => void updateEditorContent(id, true), 50);
     };
     window.addEventListener("rocket-agent-file-changed", onAgentFileChanged);
     return () =>
       window.removeEventListener("rocket-agent-file-changed", onAgentFileChanged);
   }, [id]);
 
-  const onSave = async () => {
+  const onSave = useCallback(() => {
     const file = getFileObject(id);
-    if (!file || file.kind !== "file" || code === null) return;
-    try {
-      await invoke("agent_user_edited_path", { sessionId: activeTabId, path: file.path }).catch(() => undefined);
-      await writeFile(file.path, code);
-      if (lspStatus.state === "running" && /^(typescript|javascript)/.test(editorLanguage)) {
-        void documentEvent("Save", file.path, editorLanguage, undefined, code).catch((eventError) => setError(String(eventError)));
+    if (!file || file.kind !== "file" || code === null) return Promise.resolve();
+    if (code === savedCode) return saveTailRef.current;
+    const content = code;
+    const save = saveTailRef.current.catch(() => undefined).then(async () => {
+      try {
+        setOperationError(null);
+        await writeFile(file.path, content);
+        await invoke("agent_user_edited_path", {
+          sessionId: activeTabId,
+          path: file.path,
+          content,
+        });
+        setSavedCode(content);
+        if (lspStatus.state === "running" && /^(typescript|javascript)/.test(editorLanguage)) {
+          void documentEvent("Save", file.path, editorLanguage, undefined, content).catch((eventError) => setOperationError(String(eventError)));
+        }
+      } catch (writeError) {
+        setOperationError(`Could not save ${file.name}: ${String(writeError)}`);
+        throw writeError;
       }
-      setError(null);
-    } catch (writeError) {
-      setError(String(writeError));
-    }
-  };
+    });
+    saveTailRef.current = save;
+    return save;
+  }, [activeTabId, code, editorLanguage, id, lspStatus.state, savedCode]);
 
   useEffect(() => {
-    if (selected !== id || code === null) return;
+    if (code === null) return;
     setEditorFlush(id, onSave);
     return () => setEditorFlush(id, null);
-  }, [code, id, selected]);
+  }, [code, id, onSave]);
 
   useEffect(() => {
     updateEditorContent(id);
@@ -325,10 +350,10 @@ export default function CodeEditor({ id, active, language }: Props) {
   }
 
   useEffect(() => {
-    if (code === null) return;
-    const timeoutId = setTimeout(() => onSave(), 1000);
+    if (code === null || code === savedCode) return;
+    const timeoutId = setTimeout(() => void onSave().catch(() => undefined), 1000);
     return () => clearTimeout(timeoutId);
-  }, [code, id]);
+  }, [code, onSave, savedCode]);
 
   useEffect(() => {
     if (monacoInstance) syncMarkers(monacoInstance, diagnostics);
@@ -420,7 +445,7 @@ export default function CodeEditor({ id, active, language }: Props) {
   useEffect(() => {
     const file = getFileObject(id);
     if (!file || code === null || lspStatus.state !== "running" || !/^(typescript|javascript)/.test(editorLanguage)) return;
-    void documentEvent("Open", file.path, editorLanguage, 1, code).catch((eventError) => setError(String(eventError)));
+    void documentEvent("Open", file.path, editorLanguage, 1, code).catch((eventError) => setOperationError(String(eventError)));
     return () => { void documentEvent("Close", file.path).catch(() => undefined); };
   }, [id, lspStatus.state]);
 
@@ -428,7 +453,7 @@ export default function CodeEditor({ id, active, language }: Props) {
     const file = getFileObject(id);
     if (!file || code === null || lspStatus.state !== "running" || !/^(typescript|javascript)/.test(editorLanguage)) return;
     const timeout = window.setTimeout(() => {
-      void documentEvent("Change", file.path, editorLanguage, Date.now(), code).catch((eventError) => setError(String(eventError)));
+      void documentEvent("Change", file.path, editorLanguage, Date.now(), code).catch((eventError) => setOperationError(String(eventError)));
     }, 150);
     return () => window.clearTimeout(timeout);
   }, [code, id, lspStatus.state, editorLanguage]);
@@ -437,8 +462,17 @@ export default function CodeEditor({ id, active, language }: Props) {
     <main
       className={`code-editor ${visible}`}
     >
-      {code !== null && !error && (
+      {code !== null && (
         <>
+          {(code !== savedCode || operationError) && (
+            <div
+              aria-live="polite"
+              className={`code-editor-status ${operationError ? "error" : ""}`}
+              title={operationError ?? "Changes are waiting to be saved"}
+            >
+              {operationError ?? "Unsaved"}
+            </div>
+          )}
           <MonacoEditor
               path={getFileObject(id)?.path ?? id}
               defaultLanguage={editorLanguage}
@@ -612,12 +646,12 @@ export default function CodeEditor({ id, active, language }: Props) {
           )}
         </>
       )}
-      {error && (
+      {loadError && (
         <div className="flex flex-col items-center w-full h-full justify-center gap-2">
           <IoWarning size={72} color="var(--yellow)" />
           <h1 className="text-xl font-bold">Unable to open file</h1>
           <p className="max-w-[520px] text-center text-sm text-gray-400">
-            {error}
+            {loadError}
           </p>
         </div>
       )}

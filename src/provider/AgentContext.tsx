@@ -31,6 +31,7 @@ import {
 import { disposeListener } from "../helpers/events";
 import {
   codexModelArg,
+  findAvailableModel,
   findModel,
   isModelSelectionChange,
 } from "../agent/providers/catalog";
@@ -40,9 +41,13 @@ import {
   saveAgentConfig,
   type AgentUserConfig,
 } from "../agent/providers/config";
+
+const attributionTails = new Map<string, Promise<void>>();
+export function awaitAgentAttribution(sessionId: string): Promise<void> {
+  return attributionTails.get(sessionId) ?? Promise.resolve();
+}
 import {
   HELP_TEXT,
-  TOOLS_HELP,
   validateSlashInput,
 } from "../agent/slash/commands";
 import {
@@ -190,6 +195,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const tabsRef = useRef(tabs);
   const modelIdRef = useRef(modelId);
   const tabCounterRef = useRef(1);
+  const persistenceErrorsRef = useRef(new Set<string>());
 
   activeTabIdRef.current = activeTabId;
   tabsRef.current = tabs;
@@ -221,7 +227,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void invoke<StoredTab[]>("agent_load_sessions")
+    const workspace = localStorage.getItem("project") ?? "";
+    if (workspace) void invoke<StoredTab[]>("agent_load_sessions", { workspace })
       .then((stored) => {
         if (cancelled || stored.length === 0) return;
         const restored = stored.map((tab) => ({
@@ -248,8 +255,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         setActiveTabId(restored[restored.length - 1].id);
         tabCounterRef.current = restored.length;
       })
-      .catch(() => {
-        // SQLite is best effort; retain the existing in-memory tab.
+      .catch((error) => {
+        if (!cancelled) dispatchToTab(activeTabIdRef.current, {
+          type: "error",
+          message: `Could not load saved agent sessions. In-memory chat remains available: ${String(error)}`,
+        });
       });
     void loadAgentConfig()
       .then((stored) => {
@@ -280,6 +290,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const workspace = localStorage.getItem("project") ?? "";
+      if (!workspace) return;
       for (const tab of tabs) {
         void invoke("agent_persist_session", {
           tab: {
@@ -294,8 +305,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
             workspace,
             worktree: undefined,
           },
-        }).catch(() => {
-          // Preserve in-memory operation when durable storage is unavailable.
+        }).catch((error) => {
+          const key = `${tab.id}:${String(error)}`;
+          if (persistenceErrorsRef.current.has(key)) return;
+          persistenceErrorsRef.current.add(key);
+          dispatchToTab(tab.id, {
+            type: "error",
+            message: `Could not save this agent session. History may be lost on restart: ${String(error)}`,
+          });
         });
       }
     }, 100);
@@ -326,6 +343,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       await invoke("agent_end_session", { sessionId: id });
     } catch (error) {
       dispatchToTab(id, { type: "error", message: `Failed to close session: ${String(error)}` });
+      return;
+    }
+    try {
+      await invoke("agent_delete_session", { sessionId: id });
+    } catch (error) {
+      dispatchToTab(id, { type: "error", message: `Runtime ended, but the saved session could not be deleted. The tab was kept to prevent it returning after restart: ${String(error)}` });
       return;
     }
     setTabs((current) => {
@@ -393,14 +416,39 @@ export function AgentProvider({ children }: { children: ReactNode }) {
             detail: { path: routed.path, sessionId: routed.sessionId },
           }),
         );
-        void invoke("agent_attribute_path", { sessionId: routed.sessionId, path: routed.path }).catch(() => {
-          // Attribution failure is fail-safe: the subsequent workspace scan
-          // presents the path as ambiguous rather than silently owning it.
+        const prior = attributionTails.get(routed.sessionId) ?? Promise.resolve();
+        const next = prior.catch(() => undefined).then(() =>
+          invoke<void>("agent_attribute_path", { sessionId: routed.sessionId, path: routed.path }),
+        ).catch((error) => {
+          dispatchToTab(routed.sessionId, {
+            type: "error",
+            message: `Could not track agent change for ${routed.path}: ${String(error)}`,
+          });
+          throw error;
         });
+        attributionTails.set(routed.sessionId, next);
+        void next.catch(() => undefined);
       }
-      // Auto-flush queued messages when a turn completes (Maestro pattern).
       if (routed.type === "turn_completed") {
-        void flushQueue(routed.sessionId);
+        const prior = attributionTails.get(routed.sessionId) ?? Promise.resolve();
+        const reconciled = prior.then(async () => {
+          const changes = await invoke<Array<{ path: string }>>("agent_reconcile_changes", {
+            sessionId: routed.sessionId,
+          });
+          window.dispatchEvent(new CustomEvent("rocket-agent-review-updated", {
+            detail: { count: changes.length, sessionId: routed.sessionId },
+          }));
+        }).catch((error) => {
+          dispatchToTab(routed.sessionId, {
+            type: "error",
+            message: `Could not reconcile the agent change set: ${String(error)}`,
+          });
+          throw error;
+        });
+        attributionTails.set(routed.sessionId, reconciled);
+        // Auto-flush queued messages only after the completed turn's change set
+        // is fully reconciled.
+        void reconciled.then(() => flushQueue(routed.sessionId)).catch(() => undefined);
       }
     });
     return () => {
@@ -593,15 +641,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         case "model":
           if (args) {
             const match =
-              findModel(args) ||
-              findModel(`codex/${args}`);
-            if (match?.engine === "codex") {
+              findAvailableModel(args) ||
+              findAvailableModel(`codex/${args}`);
+            if (match) {
               setModelId(match.id);
               injectAssistantNote(`Model set to **${match.displayName}**.`);
-            } else if (match) {
-              injectAssistantNote(
-                `Model **${match.displayName}** needs the Lava runtime, which ships in a later milestone.`,
-              );
             } else {
               injectAssistantNote(
                 `Unknown model \`${args}\`. Use /model to open the picker.`,
@@ -626,8 +670,53 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           injectAssistantNote(`Workspace: \`${workspace}\``);
           return true;
         }
-        case "tools":
-          injectAssistantNote(TOOLS_HELP);
+        case "checkpoint":
+          void (async () => {
+            try {
+              await flushEditorContext();
+              const checkpoint = await invoke<{ id: number }>("agent_create_checkpoint", {
+                sessionId: activeTabIdRef.current,
+                label: args || null,
+              });
+              injectAssistantNote(`Checkpoint **#${checkpoint.id}** created.`);
+            } catch (error) {
+              injectAssistantNote(`Checkpoint creation failed: ${String(error)}`);
+            }
+          })();
+          return true;
+        case "checkpoints":
+          void invoke<Array<{ id: number; label: string; kind: string; fileCount: number }>>("agent_list_checkpoints")
+            .then((items) => injectAssistantNote(items.length
+              ? `**Safe points**\n\n${items.map((item) => `#${item.id} — ${item.label} (${item.kind}, ${item.fileCount} files)`).join("\n")}\n\nUse \`/checkpoint-restore ID\` or \`/checkpoint-delete ID\`.`
+              : "No checkpoints exist for this workspace."))
+            .catch((error) => injectAssistantNote(`Could not list checkpoints: ${String(error)}`));
+          return true;
+        case "checkpoint-restore":
+          void (async () => {
+            const checkpointId = Number(args);
+            try {
+              await flushEditorContext();
+              let result: { paths: string[] };
+              try {
+                result = await invoke("agent_restore_checkpoint", { checkpointId, force: false });
+              } catch (error) {
+                if (!String(error).includes("conflicts with current bytes") || !window.confirm(`${String(error)}\n\nRestore anyway?`)) throw error;
+                result = await invoke("agent_restore_checkpoint", { checkpointId, force: true });
+              }
+              for (const path of result.paths) window.dispatchEvent(new CustomEvent("rocket-agent-file-changed", { detail: { path } }));
+              injectAssistantNote(`Restored checkpoint **#${checkpointId}** (${result.paths.length} paths).`);
+            } catch (error) { injectAssistantNote(`Checkpoint restore failed: ${String(error)}`); }
+          })();
+          return true;
+        case "checkpoint-delete":
+          void (async () => {
+            const checkpointId = Number(args);
+            if (!window.confirm(`Delete checkpoint #${checkpointId}?`)) return;
+            try {
+              await invoke("agent_delete_checkpoint", { checkpointId });
+              injectAssistantNote(`Deleted checkpoint **#${checkpointId}**.`);
+            } catch (error) { injectAssistantNote(`Checkpoint deletion failed: ${String(error)}`); }
+          })();
           return true;
         default:
           return true;

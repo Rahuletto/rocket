@@ -194,6 +194,14 @@ export function allModels(): ModelInfo[] {
   return PROVIDER_CATALOG.flatMap((provider) => provider.models);
 }
 
+export function availableModels(): ModelInfo[] {
+  return allModels().filter((model) => model.engine === "codex");
+}
+
+export function findAvailableModel(modelId: string): ModelInfo | undefined {
+  return availableModels().find((model) => model.id === modelId);
+}
+
 export function findModel(modelId: string): ModelInfo | undefined {
   return allModels().find((model) => model.id === modelId);
 }

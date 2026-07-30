@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   DEFAULT_MODEL_ID,
   type ProviderId,
-  findModel,
+  findAvailableModel,
 } from "./catalog";
 
 export interface AgentUserConfig {
@@ -33,7 +33,7 @@ function normalizeConfig(value: Partial<AgentUserConfig>): AgentUserConfig {
       ...DEFAULT_AGENT_CONFIG.baseUrls,
       ...(value.baseUrls ?? {}),
     },
-    defaultModelId: findModel(value.defaultModelId ?? "")
+    defaultModelId: findAvailableModel(value.defaultModelId ?? "")
       ? (value.defaultModelId ?? DEFAULT_MODEL_ID)
       : DEFAULT_MODEL_ID,
   };

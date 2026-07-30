@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { flushEditorContext } from "../agent/editorContext";
 import { disposeListener } from "../helpers/events";
 
 export type WorkbenchView = "explorer" | "git" | "search";
@@ -51,12 +52,16 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     const unlistenSwap = listen("swap", () => {
       setLayoutSwapped((current) => !current);
     });
+    const unlistenSave = listen("save", () => {
+      void flushEditorContext().catch(() => undefined);
+    });
 
     return () => {
       disposeListener(unlistenTerminal);
       disposeListener(unlistenSidebar);
       disposeListener(unlistenAgent);
       disposeListener(unlistenSwap);
+      disposeListener(unlistenSave);
     };
   }, []);
 

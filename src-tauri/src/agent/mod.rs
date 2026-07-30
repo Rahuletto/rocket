@@ -1,9 +1,12 @@
+mod changes;
 mod codex;
 pub(crate) mod profiles;
 mod protocol;
 mod references;
 pub(crate) mod storage;
+pub(crate) mod store;
 
+use changes::{ChangeTracker, ReviewChange};
 use codex::{discover_skills, CodexProcess};
 use references::SkillEntry;
 use std::collections::HashMap;
@@ -17,6 +20,7 @@ use crate::workspace::WorkspacePolicy;
 #[derive(Default)]
 pub struct AgentManager {
     sessions: Mutex<HashMap<String, AgentSession>>,
+    trackers: Mutex<HashMap<String, ChangeTracker>>,
 }
 
 struct AgentSession {
@@ -29,6 +33,10 @@ impl AgentManager {
         self.sessions
             .lock()
             .map_err(|_| "Agent state poisoned")?
+            .clear();
+        self.trackers
+            .lock()
+            .map_err(|_| "Agent tracker state poisoned")?
             .clear();
         Ok(())
     }
@@ -166,8 +174,27 @@ pub fn agent_start_session(
 ) -> Result<String, String> {
     let (workspace, generation) =
         policy.require_root_with_generation(PathBuf::from(&workspace).as_path())?;
+    // Install the tracker before starting the process: startup can emit file events.
+    // A runtime restart for the same logical session must retain its original baseline.
+    let mut trackers = manager
+        .trackers
+        .lock()
+        .map_err(|_| "Agent tracker state poisoned")?;
+    let tracker_is_current = trackers
+        .get(&session_id)
+        .is_some_and(|tracker| tracker.generation == generation && tracker.root == workspace);
+    if !tracker_is_current {
+        trackers.insert(
+            session_id.clone(),
+            ChangeTracker::capture(workspace.clone(), generation)?,
+        );
+    }
+    drop(trackers);
     let workspace = workspace.to_string_lossy().into_owned();
-    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "Agent state poisoned")?;
     // Replace any existing session for this tab.
     if let Some(old) = sessions.remove(&session_id) {
         drop(old);
@@ -186,7 +213,7 @@ pub fn agent_start_session(
     }
     let thread_id = process.thread_id().to_string();
     sessions.insert(
-        session_id,
+        session_id.clone(),
         AgentSession {
             generation,
             process,
@@ -195,22 +222,147 @@ pub fn agent_start_session(
     Ok(thread_id)
 }
 
+fn with_tracker<T>(
+    manager: &AgentManager,
+    policy: &WorkspacePolicy,
+    session_id: &str,
+    action: impl FnOnce(&mut ChangeTracker) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut trackers = manager
+        .trackers
+        .lock()
+        .map_err(|_| "Agent tracker state poisoned")?;
+    let tracker = trackers
+        .get_mut(session_id)
+        .ok_or_else(|| format!("No change tracker for session {session_id}"))?;
+    if !policy.is_current(tracker.generation) || policy.root().ok().as_ref() != Some(&tracker.root)
+    {
+        return Err("Change tracker belongs to a previous workspace".into());
+    }
+    action(tracker)
+}
+
+#[tauri::command]
+pub fn agent_attribute_path(
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    session_id: String,
+    path: String,
+) -> Result<(), String> {
+    with_tracker(&manager, &policy, &session_id, |tracker| {
+        tracker.attribute(Path::new(&path))
+    })
+}
+
+#[tauri::command]
+pub fn agent_user_edited_path(
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    _session_id: String,
+    path: String,
+    content: Option<String>,
+) -> Result<(), String> {
+    let root = policy.root()?;
+    let (_, generation) = policy.require_root_with_generation(&root)?;
+    let saved = content.map(String::into_bytes);
+    let mut trackers = manager
+        .trackers
+        .lock()
+        .map_err(|_| "Agent tracker state poisoned")?;
+    for tracker in trackers
+        .values_mut()
+        .filter(|tracker| tracker.generation == generation && tracker.root == root)
+    {
+        tracker.user_edited(Path::new(&path), saved.clone())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn agent_reconcile_changes(
+    app: AppHandle,
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    session_id: String,
+) -> Result<Vec<ReviewChange>, String> {
+    let changes = with_tracker(&manager, &policy, &session_id, |tracker| {
+        tracker.reconcile()?;
+        tracker.review()
+    })?;
+    store::create_checkpoint_at(
+        &store::rocket_dir(&app)?,
+        &policy.root()?,
+        Some(&session_id),
+        "After agent turn",
+        "turn-state",
+    )?;
+    Ok(changes)
+}
+
+#[tauri::command]
+pub fn agent_review_changes(
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    session_id: String,
+) -> Result<Vec<ReviewChange>, String> {
+    with_tracker(&manager, &policy, &session_id, |tracker| tracker.review())
+}
+
+#[tauri::command]
+pub fn agent_keep_changes(
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    session_id: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    with_tracker(&manager, &policy, &session_id, |tracker| {
+        tracker.keep(path.as_deref().map(Path::new))
+    })
+}
+
+#[tauri::command]
+pub fn agent_revert_changes(
+    manager: tauri::State<AgentManager>,
+    policy: tauri::State<WorkspacePolicy>,
+    session_id: String,
+    path: Option<String>,
+    force: Option<bool>,
+) -> Result<(), String> {
+    with_tracker(&manager, &policy, &session_id, |tracker| {
+        tracker.revert(path.as_deref().map(Path::new), force.unwrap_or(false))
+    })
+}
+
 #[tauri::command]
 pub fn agent_send(
+    app: AppHandle,
     manager: tauri::State<AgentManager>,
     policy: tauri::State<WorkspacePolicy>,
     session_id: String,
     prompt: String,
     reference_text: Option<String>,
 ) -> Result<String, String> {
-    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    let root = policy.root()?;
+    store::create_checkpoint_at(
+        &store::rocket_dir(&app)?,
+        &root,
+        Some(&session_id),
+        "Before agent turn",
+        "automatic",
+    )?;
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "Agent state poisoned")?;
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| format!("No agent session for {session_id}"))?;
     if !policy.is_current(session.generation) {
         return Err("Agent session belongs to a previous workspace".to_string());
     }
-    session.process.send(&prompt, reference_text.as_deref().unwrap_or(&prompt))
+    session
+        .process
+        .send(&prompt, reference_text.as_deref().unwrap_or(&prompt))
 }
 
 #[tauri::command]
@@ -220,7 +372,10 @@ pub fn agent_interrupt(
     session_id: String,
     turn_id: String,
 ) -> Result<(), String> {
-    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "Agent state poisoned")?;
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| format!("No agent session for {session_id}"))?;
@@ -238,7 +393,10 @@ pub fn agent_respond_approval(
     request_id: String,
     decision: String,
 ) -> Result<(), String> {
-    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "Agent state poisoned")?;
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| format!("No agent session for {session_id}"))?;
@@ -253,7 +411,10 @@ pub fn agent_end_session(
     manager: tauri::State<AgentManager>,
     session_id: String,
 ) -> Result<(), String> {
-    let mut sessions = manager.sessions.lock().map_err(|_| "Agent state poisoned")?;
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "Agent state poisoned")?;
     if let Some(process) = sessions.remove(&session_id) {
         drop(process); // kills the child via Drop
     }

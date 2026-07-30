@@ -34,7 +34,7 @@ import {
 import { findModel } from "../../agent/providers/catalog";
 import { SLASH_COMMANDS } from "../../agent/slash/commands";
 import { deriveTabStatus } from "../../agent/protocol";
-import { useAgent } from "../../provider/AgentContext";
+import { awaitAgentAttribution, useAgent } from "../../provider/AgentContext";
 import { useReview, type ReviewFile } from "../../provider/ReviewContext";
 import { useSource } from "../../provider/SourceContext";
 import { invoke } from "@tauri-apps/api/core";
@@ -48,15 +48,14 @@ import ToolActivity from "./ToolActivity";
 import WorktreeControls from "./WorktreeControls";
 import {
   getEditorContext,
+  flushEditorContext,
   subscribeEditorContext,
   toWorkspaceRelativePath,
 } from "../../agent/editorContext";
-import { useGit } from "../../provider/GitContext";
 
 export default function AgentPanel() {
   const { projectName } = useSource();
   const { openReview } = useReview();
-  const { diff } = useGit();
   const {
     activeTabId,
     closeTab,
@@ -109,20 +108,17 @@ export default function AgentPanel() {
   const advertised=advertisedOptions(selectedProfile);
   const profileLabel = selectedProfile?.displayName ?? "Codex";
   const modelLabel = model?.displayName ?? "Default model";
+  const workspaceLabel = projectName || "No workspace open";
+  const [trackedChangeCounts, setTrackedChangeCounts] = useState<Record<string, number>>({});
+  const changedFileCount = trackedChangeCounts[activeTabId] ?? state.changedFiles.length;
+  const setTrackedChangeCount = (count: number) => {
+    setTrackedChangeCounts((current) => ({ ...current, [activeTabId]: count }));
+  };
   const fetchChanges = async (): Promise<ReviewFile[]> => {
-    const workspace = projectName || localStorage.getItem("project") || "";
-    return Promise.all(
-      state.changedFiles.map(async (file) => {
-        const path = toWorkspaceRelativePath(file.path, workspace);
-        return {
-          additions: file.additions,
-          deletions: file.deletions,
-          kind: "modified" as const,
-          patch: await diff(path, false),
-          path,
-        };
-      }),
-    );
+    await awaitAgentAttribution(activeTabId);
+    const files = await invoke<ReviewFile[]>("agent_review_changes", { sessionId: activeTabId });
+    setTrackedChangeCount(files.length);
+    return files;
   };
   const reviewChanges = async () => {
     try {
@@ -131,10 +127,37 @@ export default function AgentPanel() {
         files,
         source: "agent",
         title: activeTab?.title ?? "Agent changes",
+        onKeep: async (path) => {
+          await invoke("agent_keep_changes", { sessionId: activeTabId, path: path ?? null });
+          if (!path) setTrackedChangeCount(0);
+        },
+        onRevert: async (path, force) => {
+          await flushEditorContext();
+          await invoke("agent_revert_changes", { sessionId: activeTabId, path: path ?? null, force: force ?? false });
+          if (!path) setTrackedChangeCount(0);
+          for (const file of path ? files.filter((item) => item.path === path || item.oldPath === path) : files) {
+            for (const changedPath of [file.path, file.oldPath].filter(Boolean)) {
+              window.dispatchEvent(new CustomEvent("rocket-agent-file-changed", { detail: { path: changedPath } }));
+            }
+          }
+        },
         onRefresh: fetchChanges,
       });
     } catch (error) { alert(String(error)); }
   };
+
+  useEffect(() => {
+    const updateCount = (event: Event) => {
+      const detail = (event as CustomEvent<{ count: number; sessionId: string }>).detail;
+      if (!detail) return;
+      setTrackedChangeCounts((current) => ({
+        ...current,
+        [detail.sessionId]: detail.count,
+      }));
+    };
+    window.addEventListener("rocket-agent-review-updated", updateCount);
+    return () => window.removeEventListener("rocket-agent-review-updated", updateCount);
+  }, []);
 
   useEffect(() => {
     const workspace = projectName || localStorage.getItem("project");
@@ -326,16 +349,16 @@ export default function AgentPanel() {
           </button>
         </div>
         <div className="agent-header-actions">
-          {state.changedFiles.length > 0 && (
+          {changedFileCount > 0 && (
             <button
-              aria-label={`${state.changedFiles.length} changed files`}
+              aria-label={`${changedFileCount} changed files`}
               className="agent-icon-button"
               onClick={() => void reviewChanges()}
               title="Review changes"
               type="button"
             >
               <FileDiff size={15} />
-              <span>{state.changedFiles.length}</span>
+              <span>{changedFileCount}</span>
             </button>
           )}
         </div>
@@ -344,7 +367,34 @@ export default function AgentPanel() {
       <div className="agent-transcript" ref={scrollRef}>
         {activeTab?.workspaceMode === "isolated-worktree" && state.sessionId && <WorktreeControls sessionId={activeTabId} onDiscard={async () => { await closeTab(activeTabId); }} />}
         {isEmpty ? (
-          <div className="agent-empty" />
+          <div className="agent-empty">
+            <div className="agent-empty-icon"><Bot size={22} /></div>
+            <h2>Work with your codebase</h2>
+            <p>Rocket sends your request and, when available, active editor context and diagnostics to the selected agent.</p>
+            <dl className="agent-empty-status">
+              <div><dt>Workspace</dt><dd title={workspaceLabel}>{workspaceLabel}</dd></div>
+              <div><dt>Runtime</dt><dd>{profileLabel}</dd></div>
+              <div><dt>Model</dt><dd>{modelLabel}</dd></div>
+              <div><dt>Safety</dt><dd>Tool actions can require your approval</dd></div>
+            </dl>
+            <div className="agent-empty-prompts" aria-label="Example prompts">
+              {["Explain the current file", "Find a bug in this workspace", "Add tests for the current selection"].map((example) => (
+                <button
+                  key={example}
+                  onClick={() => {
+                    setDraft(example);
+                    requestAnimationFrame(() => textareaRef.current?.focus());
+                  }}
+                  type="button"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+            <button className="agent-empty-setup" onClick={() => setModelPickerOpen(true)} type="button">
+              Check agent setup
+            </button>
+          </div>
         ) : (
           <>
             {state.messages.map((message) => (
@@ -370,7 +420,16 @@ export default function AgentPanel() {
                 onRespond={respondApproval}
               />
             ))}
-            {state.error && <div className="agent-error">{state.error}</div>}
+            {state.error && (
+              <div className="agent-error" role="alert">
+                <strong>Agent could not continue</strong>
+                <p>{state.error}</p>
+                <button onClick={() => setModelPickerOpen(true)} type="button">
+                  Check agent setup
+                </button>
+                <span>After fixing the issue, send your request again.</span>
+              </div>
+            )}
           </>
         )}
       </div>

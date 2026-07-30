@@ -14,7 +14,10 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { arguments: "optional-single", description: "Show or change the model", host: true, name: "model" },
   { arguments: "none", description: "List agent chat tabs", host: true, name: "sessions" },
   { arguments: "none", description: "Show workspace path", host: true, name: "workspace" },
-  { arguments: "none", description: "List available tools", host: true, name: "tools" },
+  { arguments: "optional-single", description: "Create a workspace checkpoint", host: true, name: "checkpoint" },
+  { arguments: "none", description: "List workspace checkpoints", host: true, name: "checkpoints" },
+  { arguments: "optional-single", description: "Restore a checkpoint by ID", host: true, name: "checkpoint-restore" },
+  { arguments: "optional-single", description: "Delete a checkpoint by ID", host: true, name: "checkpoint-delete" },
 ];
 
 export function parseSlashInput(raw: string): {
@@ -59,13 +62,12 @@ export function validateSlashInput(raw: string): SlashValidation | null {
   ) {
     return { error: `Usage: /${command.name} [model-id]`, ok: false };
   }
+  if (command.name.startsWith("checkpoint-") && !/^\d+$/.test(parsed.args)) {
+    return { error: `Usage: /${command.name} ID`, ok: false };
+  }
   return { args: parsed.args, command, ok: true };
 }
 
 export const HELP_TEXT = SLASH_COMMANDS.map(
   (command) => `/${command.name} — ${command.description}`,
 ).join("\n");
-
-export const TOOLS_HELP =
-  "Codex provides repository search, file reads and edits, patches, and shell commands.\n" +
-  "Rocket adds active editor selection, visible code, diagnostics, changed-file refresh, and Git review context.";
